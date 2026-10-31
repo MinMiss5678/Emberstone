@@ -1,0 +1,56 @@
+﻿diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 659a6f1..62f7eaa 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -25,6 +25,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+ include_directories(Includes)
+ include_directories(Extensions/RosettaPython/Includes)
+ 
++# Emberstone difftest: put the RNG shim directory first
++if (ROSETTA_SHIM_DIR)
++    include_directories(BEFORE ${ROSETTA_SHIM_DIR})
++endif()
++
+ # Dependencies
+ find_package(doctest CONFIG REQUIRED)
+ find_package(effolkronium_random CONFIG REQUIRED)
+@@ -40,7 +45,8 @@ if (BUILD_FROM_PIP)
+     endif()
+ endif()
+ 
+-find_package(pybind11 CONFIG REQUIRED)
++# 量測用：略過 Python 擴充
++# find_package(pybind11 CONFIG REQUIRED)
+ 
+ # Compile options
+ include(Builds/CMake/CompileOptions.cmake)
+@@ -61,7 +67,7 @@ set(RESOURCES_JSONS
+ 
+ # Project modules
+ add_subdirectory(Sources/Rosetta)
+-add_subdirectory(Tests/UnitTests)
++# add_subdirectory(Tests/UnitTests)
+ add_subdirectory(Extensions/RosettaConsole)
+ add_subdirectory(Extensions/RosettaTool)
+ 
+@@ -78,4 +84,4 @@ endif()
+ if (BUILD_FROM_PIP)
+     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${DEFAULT_CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+ endif()
+-add_subdirectory(Extensions/RosettaPython)
++# add_subdirectory(Extensions/RosettaPython)
+diff --git a/vcpkg.json b/vcpkg.json
+index 675b926..0d50bf5 100644
+--- a/vcpkg.json
++++ b/vcpkg.json
+@@ -5,7 +5,6 @@
+     "bfgroup-lyra",
+     "doctest",
+     "effolkronium-random",
+-    "nlohmann-json",
+-    "pybind11"
++    "nlohmann-json"
+   ]
+-}
++}
+\ No newline at end of file

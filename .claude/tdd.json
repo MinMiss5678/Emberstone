@@ -2,21 +2,29 @@
   "test_globs": [
     "crates/*/tests/**/*.rs",
     "crates/*/src/**/tests.rs",
-    "crates/*/src/**/tests/**/*.rs"
+    "crates/*/src/**/tests/**/*.rs",
+    "tools/*/tests/**/*.rs"
   ],
   "impl_globs": [
     "crates/*/src/**/*.rs",
-    "crates/*/build.rs"
+    "crates/*/build.rs",
+    "tools/*/src/**/*.rs",
+    "tools/rosetta-bridge/**/*.cpp",
+    "tools/rosetta-bridge/**/*.hpp",
+    "tools/rosetta-bridge/patches/**",
+    "data/batches.tsv"
   ],
   "ignore_globs": [
-    "target/**"
+    "target/**",
+    "tools/rosetta-bridge/build/**"
   ],
   "test_command_regex": "(^|[;&|]\\s*)cargo\\s+(\\+\\S+\\s+)?test\\b",
   "language": "rust",
   "mcp_server": "rustrover",
-  "code_extensions": [".rs"],
-  "migration_command_regex": "(^|[;&|]\\s*)cargo\\s+run\\b.*-p\\s+emberstone-(data|cardgen)\\b",
+  "code_extensions": [".rs", ".cpp", ".hpp"],
+  "migration_command_regex": "(^|[;&|]\\s*)cargo\\s+run\\b.*(-p\\s+emberstone-(data|cardgen)\\b|-p\\s+emberstone-difftest\\b.*\\bbatches\\b)",
   "migration_globs": [
-    "crates/emberstone-data/src/generated/**"
+    "crates/emberstone-data/src/generated/**",
+    "data/batches.tsv"
   ]
 }

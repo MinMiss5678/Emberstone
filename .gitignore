@@ -1,3 +1,5 @@
 /target
 *.stackdump
 /data/tw_all.json
+/data/en_all.json
+/tools/rosetta-bridge/build/

@@ -33,7 +33,8 @@ Cargo workspace，**相依只能單向**：data → core → cards → ai → si
 - `emberstone-ai`：隨機、規則 AI、搜尋 AI（決定化＋MCTS）、學習式評估的推論端，只透過 core 的狀態與合法行動決策。
 - `emberstone-sim`：對戰模擬、牌組勝率矩陣、速度量測、繁體中文報告。
 - `emberstone-py`（之後建立）：PyO3 的 Gym 風格環境；訓練與 LLM 代理在 Python 端。
-- `tools/`：和 RosettaStone（C++，Windows 上以 MSVC 編譯）的差分測試工具。加入程式碼時要同步更新 `.claude/tdd.json` 的 globs，否則不受稽核。
+- `emberstone-cardgen`：卡表產生器（`cargo run -p emberstone-cardgen --bin gen-cards`），只有它用 serde_json。
+- `tools/difftest`（Rust）＋ `tools/rosetta-bridge`（C++，Windows 上以 MSVC 編譯）：和 RosettaStone 的差分測試。`difftest batches` 產生 `data/batches.tsv`；`difftest run --batch A --games N --seed S` 跑隨機對局比對。橋接程式要先用 `tools/rosetta-bridge/build.bat` 編好（說明見該目錄 README）；`tests/bridge.rs` 需要它，主要 CI 不跑、改在 `difftest.yml`。`tools/` 的檔案已列入 `.claude/tdd.json`，新增其他類型檔案時要同步更新 globs。
 
 ### 核心設計約束
 - 實體存在 `Vec<Entity>`、以編號互相參照；手牌／牌庫／戰場是編號清單。整份狀態 `#[derive(Clone)]`——複製速度是搜尋 AI 的命脈，避免引入讓複製變慢的結構（`Rc`、大量小陣列配置等）。

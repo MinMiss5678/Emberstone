@@ -96,5 +96,9 @@ jobs:
         run: |
           cargo run -p emberstone-cardgen --bin gen-cards
           git diff --exit-code -- crates/emberstone-data/src/generated/
+      # 差分測試的橋接程式測試（tools/difftest/tests/bridge.rs）要先編 RosettaStone，
+      # 放在 difftest.yml，這裡只跑不需要橋接程式的部分。
       - name: 測試
-        run: cargo test --workspace
+        run: |
+          cargo test --workspace --exclude emberstone-difftest
+          cargo test -p emberstone-difftest --lib --bins --test batches --test rng --test compare
