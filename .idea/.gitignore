@@ -8,3 +8,6 @@
 # Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
+# Cargo 匯入時自動產生的模組檔（新增 crate 就會變動），不納入版本控制
+/*.iml
+/modules.xml
