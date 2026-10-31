@@ -12,7 +12,8 @@
     "tools/rosetta-bridge/**/*.cpp",
     "tools/rosetta-bridge/**/*.hpp",
     "tools/rosetta-bridge/patches/**",
-    "data/batches.tsv"
+    "data/batches.tsv",
+    "data/keyword_pool.txt"
   ],
   "ignore_globs": [
     "target/**",
@@ -21,10 +22,15 @@
   "test_command_regex": "(^|[;&|]\\s*)cargo\\s+(\\+\\S+\\s+)?test\\b",
   "language": "rust",
   "mcp_server": "rustrover",
-  "code_extensions": [".rs", ".cpp", ".hpp"],
-  "migration_command_regex": "(^|[;&|]\\s*)cargo\\s+run\\b.*(-p\\s+emberstone-(data|cardgen)\\b|-p\\s+emberstone-difftest\\b.*\\bbatches\\b)",
+  "code_extensions": [
+    ".rs",
+    ".cpp",
+    ".hpp"
+  ],
+  "migration_command_regex": "(^|[;&|]\\s*)cargo\\s+run\\b.*(-p\\s+emberstone-(data|cardgen)\\b|-p\\s+emberstone-difftest\\b.*\\b(batches|keywords)\\b)",
   "migration_globs": [
     "crates/emberstone-data/src/generated/**",
-    "data/batches.tsv"
+    "data/batches.tsv",
+    "data/keyword_pool.txt"
   ]
 }

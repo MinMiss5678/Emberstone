@@ -9,9 +9,11 @@ on:
       - "tools/rosetta-bridge/**"
       - "tools/difftest/**"
       - "data/batches.tsv"
+      - "data/keyword_pool.txt"
       - ".github/workflows/difftest.yml"
-      # difftest 組牌時查 emberstone-data 的卡片資料；相依套件與工具鏈版本也會影響結果
+      # difftest 組牌時查 emberstone-data 的卡片資料，並和 emberstone-core 比對；相依套件與工具鏈版本也會影響結果
       - "crates/emberstone-data/**"
+      - "crates/emberstone-core/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -97,3 +99,17 @@ jobs:
           cat difftest.txt
           # RosettaStone 本身的錯誤（逾時、當機）只回報；出現「不一致」才算失敗
           if grep -q '：不一致' difftest.txt; then exit 1; fi
+
+      - name: 純關鍵字卡池差分（Emberstone 對 RosettaStone）
+        run: |
+          GAMES="${{ github.event.inputs.games || '100' }}"
+          cargo run --release -p emberstone-difftest --bin difftest -- \
+            run --engine emberstone --pool keywords --games "$GAMES" --seed "${{ github.run_number }}" > keywords.txt || true
+          {
+            echo '## 差分測試（Emberstone，純關鍵字卡池）'
+            echo '```'
+            grep -v '：一致$' keywords.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat keywords.txt
+          if grep -q '：不一致' keywords.txt; then exit 1; fi

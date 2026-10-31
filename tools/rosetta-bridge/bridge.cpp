@@ -233,7 +233,8 @@ json PlayerJson(Player* p)
         { "board", board },
         { "deck_count", p->GetDeckZone()->GetCount() },
         { "secrets", secrets },
-        { "fatigue", p->GetGameTag(GameTag::FATIGUE) },
+        // 玩家的 FATIGUE 標籤不會更新；疲勞累計記在英雄的 fatigue。
+        { "fatigue", hero->fatigue },
     };
 }
 
@@ -355,6 +356,12 @@ json Options()
         }
         for (Character* t : a->GetValidAttackTargets(p->opponent))
         {
+            // GetValidAttackTargets 沒排除「剛出場的衝刺手下打英雄」，要再用 IsValidAttackTarget 過濾，
+            // 否則這個行動會被列出，執行時卻什麼都不做。
+            if (!a->IsValidAttackTarget(p->opponent, t))
+            {
+                continue;
+            }
             out.push_back({ { "type", "attack" },
                             { "attacker", TargetJson(a) },
                             { "target", TargetJson(t) } });

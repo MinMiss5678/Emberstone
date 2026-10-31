@@ -28,6 +28,7 @@ tools\rosetta-bridge\build.bat
   - `0001-build-options.patch`：略過 Python 擴充與單元測試，加入 shim 的 include 路徑
   - `0002-rng-call-sites.patch`：3 處直接拿亂數引擎洗牌的地方改走 `Random::shuffle`，才記錄得到
   - `0003-fix-adjacent-aura-use-after-free.patch`：修 RosettaStone 的記憶體錯誤（用 AddressSanitizer 找到）：相鄰光環被移除後，戰場仍留著已釋放的指標
+  - `0004-coin-temp-mana.patch`：RosettaStone 的幸運幣（`GAME_005`）沒有定義效果，打出去什麼都不做，補上「本回合 +1 暫時法力」；並照現行規則（29.0 版，2024 年 3 月）讓暫時法力可以超過 10（例如 11/10），RosettaStone 原本限制在 10
 
 ## 協定
 
@@ -46,4 +47,6 @@ stdin 每行一個請求，stdout 每行一個回應：`{"ok":true,...}` 或 `{"
 
 ## 已知的 RosettaStone 問題
 
+- `GetValidAttackTargets` 沒排除「剛出場的衝刺手下打英雄」（執行時 `IsValidAttackTarget` 才擋下、什麼都不做）。橋接程式列合法行動時再用 `IsValidAttackTarget` 過濾。
+- 英雄的攻擊力一律加上武器攻擊力，在對手回合被攻擊時也會用武器反擊；現行規則是武器只在自己的回合有作用。Emberstone 照現行規則，第 1 階段的差分卡池沒有武器，所以還沒影響。
 - `BT_120`（戰槌挑戰者，「戰鬥到死」）：有時無窮迴圈（`difftest` 20 秒逾時後重啟橋接程式）或內部錯誤。差分測試把這些局記為「錯誤」，不算不一致。

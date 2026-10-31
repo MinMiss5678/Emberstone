@@ -3,7 +3,11 @@
 //! - `difftest batches --rosetta <RosettaStone 原始碼目錄> [--en data/en_all.json] [--out data/batches.tsv]`
 //! - `difftest run --batch A --games N --seed S`：用指定批次的卡組隨機牌組，
 //!   在 RosettaStone 上記錄一局再用記錄的亂數重播，逐步比對狀態。
-//!   （Emberstone 引擎完成後改成和 Emberstone 比對。）
+//! - `difftest run --engine emberstone --pool keywords --games N --seed S`：
+//!   在 RosettaStone 記錄隨機對局（不使用英雄技能），再讓 Emberstone 用同樣的行動和亂數重播，
+//!   逐步比對狀態與合法行動。
+//! - `difftest keywords --rosetta <RosettaStone 原始碼目錄> [--en data/en_all.json] [--out data/keyword_pool.txt]`：
+//!   產生第 1 階段的純關鍵字卡池。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -13,7 +17,9 @@ use emberstone_data::{CardClass, CardType, Rarity, card_by_id};
 use emberstone_difftest::actions::Action;
 use emberstone_difftest::batches::{Batch, Row, classify, implemented_ids, parse_tsv, to_tsv};
 use emberstone_difftest::bridge::{Bridge, GameSetup, PlayerSetup, RngMode};
+use emberstone_difftest::emberstone;
 use emberstone_difftest::generate::{OptionSource, SplitMix64, random_actions};
+use emberstone_difftest::pool::{keyword_pool, parse_pool};
 use emberstone_difftest::snapshot::{Snapshot, first_difference};
 
 const MAX_ACTIONS: usize = 1000;
@@ -38,15 +44,10 @@ fn cmd_batches(args: &[String]) -> Result<(), String> {
         PathBuf::from(arg(args, "--rosetta").ok_or("需要 --rosetta <RosettaStone 原始碼目錄>")?);
     let en = arg(args, "--en").map_or_else(|| root().join("data/en_all.json"), PathBuf::from);
     let out = arg(args, "--out").map_or_else(|| root().join("data/batches.tsv"), PathBuf::from);
-    let lists: Vec<String> = ["Classic", "Standard", "Wild"]
-        .iter()
-        .map(|f| read(&rosetta.join(format!("Documents/CardList - {f}.md"))))
-        .collect::<Result<_, _>>()?;
-    let refs: Vec<&str> = lists.iter().map(String::as_str).collect();
     let rows = classify(
         &read(&en)?,
         &read(&rosetta.join("Resources/cards.json"))?,
-        &implemented_ids(&refs),
+        &rosetta_implemented(&rosetta)?,
     )?;
     std::fs::write(&out, to_tsv(&rows)).map_err(|e| format!("寫不進 {}：{e}", out.display()))?;
     let count = |b: Batch| rows.iter().filter(|r| r.batch == b).count();
@@ -58,6 +59,32 @@ fn cmd_batches(args: &[String]) -> Result<(), String> {
         count(Batch::C),
         out.display()
     );
+    Ok(())
+}
+
+fn rosetta_implemented(rosetta: &Path) -> Result<std::collections::BTreeSet<String>, String> {
+    let lists: Vec<String> = ["Classic", "Standard", "Wild"]
+        .iter()
+        .map(|f| read(&rosetta.join(format!("Documents/CardList - {f}.md"))))
+        .collect::<Result<_, _>>()?;
+    let refs: Vec<&str> = lists.iter().map(String::as_str).collect();
+    Ok(implemented_ids(&refs))
+}
+
+fn cmd_keywords(args: &[String]) -> Result<(), String> {
+    let rosetta =
+        PathBuf::from(arg(args, "--rosetta").ok_or("需要 --rosetta <RosettaStone 原始碼目錄>")?);
+    let en = arg(args, "--en").map_or_else(|| root().join("data/en_all.json"), PathBuf::from);
+    let out =
+        arg(args, "--out").map_or_else(|| root().join("data/keyword_pool.txt"), PathBuf::from);
+    let ids = keyword_pool(
+        &read(&en)?,
+        &read(&rosetta.join("Resources/cards.json"))?,
+        &rosetta_implemented(&rosetta)?,
+    )?;
+    std::fs::write(&out, emberstone_difftest::pool::to_text(&ids))
+        .map_err(|e| format!("寫不進 {}：{e}", out.display()))?;
+    println!("卡池 {} 張；已寫入 {}", ids.len(), out.display());
     Ok(())
 }
 
@@ -96,6 +123,15 @@ impl Pool {
             })
             .collect();
         Self { cards }
+    }
+
+    /// 卡號清單（卡池檔）組成的卡池。
+    fn from_ids(ids: &[String]) -> Result<Self, String> {
+        let cards = ids
+            .iter()
+            .map(|id| card_by_id(id).ok_or_else(|| format!("卡表沒有 {id}")))
+            .collect::<Result<_, _>>()?;
+        Ok(Self { cards })
     }
 
     fn classes(&self) -> Vec<CardClass> {
@@ -139,13 +175,23 @@ impl Pool {
 struct Recorder<'a> {
     bridge: &'a mut Bridge,
     snapshots: Vec<Snapshot>,
+    /// 每一步的合法行動（和 Emberstone 比對用）。
+    options: Vec<Vec<Action>>,
+    /// 不使用英雄技能（第 1 階段）。
+    skip_power: bool,
     error: Option<String>,
 }
 
 impl OptionSource for Recorder<'_> {
     fn options(&mut self) -> Vec<Action> {
         match self.bridge.options() {
-            Ok(v) => v,
+            Ok(mut v) => {
+                if self.skip_power {
+                    v.retain(|a| !matches!(a, Action::Power { .. }));
+                }
+                self.options.push(v.clone());
+                v
+            }
             Err(e) => {
                 self.error = Some(format!("{}：{}", e.kind, e.message));
                 Vec::new()
@@ -213,15 +259,15 @@ enum Outcome {
     Error(String),
 }
 
-fn play_game(bridge: &mut Bridge, pool: &Pool, rows: &[Row], seed: u64) -> Result<Outcome, String> {
-    let to_rosetta: HashMap<&str, &str> = rows
-        .iter()
-        .filter_map(|r| r.rosetta_id.as_deref().map(|rid| (r.id.as_str(), rid)))
-        .collect();
-    let back: HashMap<String, String> = rows
-        .iter()
-        .filter_map(|r| r.rosetta_id.clone().map(|rid| (rid, r.id.clone())))
-        .collect();
+/// 一局的設定：雙方牌組（RosettaStone 卡號）、記錄用種子、行動種子。
+struct Plan {
+    p1: PlayerSetup,
+    p2: PlayerSetup,
+    record_seed: u64,
+    action_seed: u64,
+}
+
+fn plan(pool: &Pool, to_rosetta: &HashMap<&str, &str>, seed: u64) -> Result<Plan, String> {
     let classes = pool.classes();
     if classes.is_empty() {
         return Err("批次裡沒有可用的職業".to_string());
@@ -243,34 +289,87 @@ fn play_game(bridge: &mut Bridge, pool: &Pool, rows: &[Row], seed: u64) -> Resul
     let p2 = player(&mut rng)?;
     let record_seed = rng.next_u64() & 0xFFFF_FFFF;
     let action_seed = rng.next_u64();
+    Ok(Plan {
+        p1,
+        p2,
+        record_seed,
+        action_seed,
+    })
+}
 
-    let setup = |rng_mode: RngMode| GameSetup {
-        p1: p1.clone(),
-        p2: p2.clone(),
-        rng: rng_mode,
+/// 在 RosettaStone 記錄一局：回傳行動、每步快照、每步合法行動與亂數事件；出錯回傳錯誤局。
+struct Recorded {
+    actions: Vec<Action>,
+    snapshots: Vec<Snapshot>,
+    options: Vec<Vec<Action>>,
+    events: Vec<emberstone_difftest::rng::RngEvent>,
+}
+
+fn record(
+    bridge: &mut Bridge,
+    plan: &Plan,
+    skip_power: bool,
+) -> Result<Result<Recorded, String>, String> {
+    let setup = GameSetup {
+        p1: plan.p1.clone(),
+        p2: plan.p2.clone(),
+        rng: RngMode::Record {
+            seed: plan.record_seed,
+        },
     };
-    let first = match bridge.new_game(&setup(RngMode::Record { seed: record_seed })) {
+    let first = match bridge.new_game(&setup) {
         Ok(s) => s,
-        Err(e) => {
-            return Ok(Outcome::Error(format!(
-                "開局失敗：{}：{}",
-                e.kind, e.message
-            )));
-        }
+        Err(e) => return Ok(Err(format!("開局失敗：{}：{}", e.kind, e.message))),
     };
     let mut rec = Recorder {
         bridge,
         snapshots: vec![first],
+        options: Vec::new(),
+        skip_power,
         error: None,
     };
-    let actions = random_actions(action_seed, &mut rec, MAX_ACTIONS);
-    let recorded = rec.snapshots;
+    let actions = random_actions(plan.action_seed, &mut rec, MAX_ACTIONS);
     if let Some(e) = rec.error {
-        return Ok(Outcome::Error(format!("記錄時：{e}")));
+        return Ok(Err(format!("記錄時：{e}")));
     }
+    let snapshots = rec.snapshots;
+    let options = rec.options;
     let events = bridge
         .events()
         .map_err(|e| format!("取不到亂數事件：{}", e.message))?;
+    Ok(Ok(Recorded {
+        actions,
+        snapshots,
+        options,
+        events,
+    }))
+}
+
+fn play_game(bridge: &mut Bridge, pool: &Pool, rows: &[Row], seed: u64) -> Result<Outcome, String> {
+    let to_rosetta: HashMap<&str, &str> = rows
+        .iter()
+        .filter_map(|r| r.rosetta_id.as_deref().map(|rid| (r.id.as_str(), rid)))
+        .collect();
+    let back: HashMap<String, String> = rows
+        .iter()
+        .filter_map(|r| r.rosetta_id.clone().map(|rid| (rid, r.id.clone())))
+        .collect();
+    let plan = plan(pool, &to_rosetta, seed)?;
+    let rec = match record(bridge, &plan, false)? {
+        Ok(r) => r,
+        Err(e) => return Ok(Outcome::Error(e)),
+    };
+    let Recorded {
+        actions,
+        snapshots: recorded,
+        events,
+        ..
+    } = rec;
+    let setup = |rng_mode: RngMode| GameSetup {
+        p1: plan.p1.clone(),
+        p2: plan.p2.clone(),
+        rng: rng_mode,
+    };
 
     let mut replayed = Vec::with_capacity(recorded.len());
     match bridge.new_game(&setup(RngMode::Replay { events })) {
@@ -303,10 +402,14 @@ fn play_game(bridge: &mut Bridge, pool: &Pool, rows: &[Row], seed: u64) -> Resul
 }
 
 fn cmd_run(args: &[String]) -> Result<bool, String> {
-    let batch = match arg(args, "--batch").as_deref() {
-        Some("A") => Batch::A,
-        Some("B") => Batch::B,
-        other => return Err(format!("--batch 只能是 A 或 B（收到 {other:?}）")),
+    let emberstone_engine = match arg(args, "--engine").as_deref() {
+        None | Some("rosetta") => false,
+        Some("emberstone") => true,
+        other => {
+            return Err(format!(
+                "--engine 只能是 rosetta 或 emberstone（收到 {other:?}）"
+            ));
+        }
     };
     let games: usize = arg(args, "--games")
         .ok_or("需要 --games")?
@@ -317,36 +420,128 @@ fn cmd_run(args: &[String]) -> Result<bool, String> {
         .parse()
         .map_err(|e| format!("--seed：{e}"))?;
     let rows = parse_tsv(&read(&root().join("data/batches.tsv"))?)?;
-    let pool = Pool::new(&rows, batch);
+    let pool = match (
+        arg(args, "--pool").as_deref(),
+        arg(args, "--batch").as_deref(),
+    ) {
+        (Some("keywords"), None) => {
+            Pool::from_ids(&parse_pool(&read(&root().join("data/keyword_pool.txt"))?))?
+        }
+        (None, Some("A")) => Pool::new(&rows, Batch::A),
+        (None, Some("B")) => Pool::new(&rows, Batch::B),
+        (p, b) => {
+            return Err(format!(
+                "要指定 --batch A|B 或 --pool keywords 其中一個（收到 {p:?}、{b:?}）"
+            ));
+        }
+    };
     let mut bridge = Bridge::spawn_default()?;
 
-    let mut consistent = 0;
+    let (mut consistent, mut different) = (0, 0);
     for g in 0..games {
         // 上一局讓橋接程式逾時或當掉時，重新啟動一個。
         if !bridge.is_alive() {
             bridge = Bridge::spawn_default()?;
         }
         let game_seed = seed.wrapping_mul(1_000_003).wrapping_add(g as u64);
-        match play_game(&mut bridge, &pool, &rows, game_seed)? {
+        let outcome = if emberstone_engine {
+            play_emberstone(&mut bridge, &pool, game_seed)?
+        } else {
+            play_game(&mut bridge, &pool, &rows, game_seed)?
+        };
+        match outcome {
             Outcome::Consistent => {
                 consistent += 1;
                 println!("第 {} 局：一致", g + 1);
             }
-            Outcome::Different(d) => println!("第 {} 局：不一致，{d}", g + 1),
+            Outcome::Different(d) => {
+                different += 1;
+                println!("第 {} 局：不一致，{d}", g + 1);
+            }
             Outcome::Error(e) => println!("第 {} 局：錯誤，{e}", g + 1),
         }
     }
     println!("一致 {consistent}/{games}");
-    Ok(consistent == games)
+    if emberstone_engine {
+        // RosettaStone 本身的錯誤（逾時、當機）不算不一致（case G3）。
+        println!(
+            "不一致 {different} 局；RosettaStone 錯誤 {} 局",
+            games - consistent - different
+        );
+        Ok(different == 0)
+    } else {
+        Ok(consistent == games)
+    }
+}
+
+/// 依 Debug 字串排序，比對合法行動清單用。
+fn sorted_actions(v: &[Action]) -> Vec<String> {
+    let mut s: Vec<String> = v.iter().map(|a| format!("{a:?}")).collect();
+    s.sort();
+    s
+}
+
+/// 在 RosettaStone 記錄一局（不使用英雄技能），再讓 Emberstone 用同樣的行動與亂數重播，
+/// 逐步比對合法行動與快照。
+fn play_emberstone(bridge: &mut Bridge, pool: &Pool, seed: u64) -> Result<Outcome, String> {
+    let plan = plan(pool, &HashMap::new(), seed)?;
+    let rec = match record(bridge, &plan, true)? {
+        Ok(r) => r,
+        Err(e) => return Ok(Outcome::Error(e)),
+    };
+    let setup = GameSetup {
+        p1: plan.p1.clone(),
+        p2: plan.p2.clone(),
+        rng: RngMode::Replay {
+            events: rec.events.clone(),
+        },
+    };
+    let mut game = match emberstone::new_game(&setup) {
+        Ok(g) => g,
+        Err(e) => return Ok(Outcome::Different(format!("Emberstone 開局失敗：{e}"))),
+    };
+    let compare = |step: usize, ours: Snapshot| -> Option<Outcome> {
+        let theirs = rec.snapshots.get(step)?;
+        first_difference(std::slice::from_ref(theirs), &[ours])
+            .map(|d| Outcome::Different(format!("第 {step} 步不同：{}", d.fields.join("、"))))
+    };
+    if let Some(d) = compare(0, emberstone::snapshot(&game)) {
+        return Ok(d);
+    }
+    for (step, a) in rec.actions.iter().enumerate() {
+        let theirs = sorted_actions(&rec.options[step]);
+        let mine = sorted_actions(&emberstone::options(&game));
+        if theirs != mine {
+            let only = |x: &[String], y: &[String]| -> Vec<String> {
+                x.iter().filter(|s| !y.contains(s)).cloned().collect()
+            };
+            return Ok(Outcome::Different(format!(
+                "第 {step} 步合法行動不同：只有 RosettaStone {:?}；只有 Emberstone {:?}",
+                only(&theirs, &mine),
+                only(&mine, &theirs)
+            )));
+        }
+        if let Err(e) = emberstone::act(&mut game, a) {
+            return Ok(Outcome::Different(format!(
+                "第 {step} 步 Emberstone 執行失敗：{e}（行動 {a:?}）"
+            )));
+        }
+        if let Some(d) = compare(step + 1, emberstone::snapshot(&game)) {
+            return Ok(d);
+        }
+    }
+    Ok(Outcome::Consistent)
 }
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
         Some("batches") => cmd_batches(&args).map(|_| true),
+        Some("keywords") => cmd_keywords(&args).map(|_| true),
         Some("run") => cmd_run(&args),
         _ => Err(
-            "用法：difftest batches --rosetta <目錄> | difftest run --batch A --games N --seed S"
+            "用法：difftest batches --rosetta <目錄> | difftest keywords --rosetta <目錄> | \
+             difftest run [--engine emberstone] (--batch A | --pool keywords) --games N --seed S"
                 .to_string(),
         ),
     };

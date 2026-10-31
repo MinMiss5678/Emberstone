@@ -101,4 +101,4 @@ jobs:
       - name: 測試
         run: |
           cargo test --workspace --exclude emberstone-difftest
-          cargo test -p emberstone-difftest --lib --bins --test batches --test rng --test compare
+          cargo test -p emberstone-difftest --lib --bins --test batches --test rng --test compare --test engine --test pool
