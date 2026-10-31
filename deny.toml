@@ -1,0 +1,31 @@
+# cargo-deny 設定（CI 的 deny job 使用）。本機：cargo deny check
+
+[graph]
+all-features = true
+
+# 已知漏洞與停止維護的套件（RustSec 資料庫）
+[advisories]
+version = 2
+yanked = "deny"
+ignore = []
+
+# 只接受寬鬆授權；新增相依若帶進其他授權，CI 會失敗，再評估要不要加進清單
+[licenses]
+version = 2
+allow = ["MIT", "Apache-2.0", "Unlicense", "Unicode-3.0"]
+confidence-threshold = 0.9
+
+# 本專案自己的 crate（publish = false）沒有授權欄位，不檢查
+[licenses.private]
+ignore = true
+
+# 同一套件多版本先只警告，不擋
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+# 只允許 crates.io 來源
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

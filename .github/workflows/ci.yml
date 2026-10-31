@@ -1,42 +1,95 @@
 name: CI
 
+# PR 開／更新時跑完整驗證；merge 進 main 後再跑一次當守門。
+# 純分支 push 不跑（沒開 PR 就沒有 pull_request 事件），避免重複。
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
+
+# 同一 PR／分支連續推 → 取消上一個還在跑的 run。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  check:
+  # 只改文件（docs/**、*.md）時，下面看程式碼的 job 用 if 條件標成 skipped。
+  # 不用 on: paths-ignore：那會讓 workflow 完全不觸發，必要檢查永遠等不到結果、PR 卡死；
+  # skipped 會被 GitHub 視為通過。
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # push 事件要比對前一個 commit
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - '!(docs/**|**/*.md)'
+
+  # 機密掃描（gitleaks）：本機 pre-commit hook（.githooks/）的後備防線。
+  # 不看 changes：文件一樣可能夾帶金鑰。掃全歷史；確認過的誤判列在 .gitleaksignore。
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: >
+          docker run --rm -v "$PWD":/repo zricethezav/gitleaks:v8.30.1
+          git /repo --redact --no-banner --verbose
+
+  # 相依套件檢查（cargo-deny）：已知漏洞（RustSec）、授權條款、來源。設定在 deny.toml。
+  # 不看 changes：漏洞資料庫會更新，沒改程式碼也可能冒出新漏洞。
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
+  # 格式與 Clippy：純 Rust 檢查，放 Linux（私人 repo 的 Windows 分鐘數算兩倍）。
+  lint:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # 版本由 rust-toolchain.toml 固定，rustup 會自動安裝
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: 格式檢查
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  # 測試與卡表一致性：在 Windows（MSVC）跑，和實際執行環境一致。
+  test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v4
-
-      # 版本由 rust-toolchain.toml 固定，rustup 會自動安裝
-      - name: 安裝 Rust 工具鏈
-        run: rustup show
-
+      - run: rustup show
       - uses: Swatinem/rust-cache@v2
-
       - name: 下載固定版本的卡片資料
         run: |
           BUILD=$(sed -n 1p data/hsjson_build.txt)
           SHA1=$(sed -n 2p data/hsjson_build.txt)
           curl -fsSL "https://api.hearthstonejson.com/v1/$BUILD/zhTW/cards.json" -o data/tw_all.json
           echo "$SHA1  data/tw_all.json" | sha1sum -c -
-
-      - name: 格式檢查
-        run: cargo fmt --all --check
-
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
       - name: 卡表與卡片資料一致
         run: |
           cargo run -p emberstone-cardgen --bin gen-cards
           git diff --exit-code -- crates/emberstone-data/src/generated/
-
       - name: 測試
         run: cargo test --workspace

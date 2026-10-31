@@ -21,7 +21,7 @@ cargo fmt
 cargo run --release -p emberstone-sim   # 執行檔名為 emberstone
 ```
 
-Rust 版本由 `rust-toolchain.toml` 固定為 1.99.1（Windows 原生 MSVC，用 RustRover 開發；效能分析在 WSL 做）。edition 2024。
+Rust 版本由 `rust-toolchain.toml` 固定為 1.99.1（Windows 原生 MSVC，用 RustRover 開發；效能分析也在 Windows 做，預定用 samply，RustRover 內建分析器不支援 Windows）。edition 2024。
 
 ## 架構
 
@@ -33,7 +33,7 @@ Cargo workspace，**相依只能單向**：data → core → cards → ai → si
 - `emberstone-ai`：隨機、規則 AI、搜尋 AI（決定化＋MCTS）、學習式評估的推論端，只透過 core 的狀態與合法行動決策。
 - `emberstone-sim`：對戰模擬、牌組勝率矩陣、速度量測、繁體中文報告。
 - `emberstone-py`（之後建立）：PyO3 的 Gym 風格環境；訓練與 LLM 代理在 Python 端。
-- `tools/`：和 RosettaStone（C++，WSL 編譯）的差分測試工具。加入程式碼時要同步更新 `.claude/tdd.json` 的 globs，否則不受稽核。
+- `tools/`：和 RosettaStone（C++，Windows 上以 MSVC 編譯）的差分測試工具。加入程式碼時要同步更新 `.claude/tdd.json` 的 globs，否則不受稽核。
 
 ### 核心設計約束
 - 實體存在 `Vec<Entity>`、以編號互相參照；手牌／牌庫／戰場是編號清單。整份狀態 `#[derive(Clone)]`——複製速度是搜尋 AI 的命脈，避免引入讓複製變慢的結構（`Rc`、大量小陣列配置等）。
@@ -59,6 +59,13 @@ Cargo workspace，**相依只能單向**：data → core → cards → ai → si
 - `data/tw_all.json` 不在 git 裡；測試需要它，缺檔時照 `data/README.md` 下載固定版本。
 - `cargo build`／`clippy` 等不改檔的指令可用 Bash。`cargo fmt` 會改寫 `.rs` 而不經 hook 記錄，Stop 時會被列為未記錄變更，執行前先跟使用者確認。
 - Bash 指令裡同時出現「寫檔的腳本」和 `.rs` 路徑字樣時，hook 會保守地擋下（即使只是改 `.md`）；改文件用 Edit/Write 工具。
+
+## Git 與 CI
+
+- GitHub 私人 repo `MinMiss5678/Emberstone`，預設分支 `main`。每段工作開分支、推上去開 PR，CI 通過、使用者看過再合併；不直接推 `main`（免費方案的私人 repo 不能設分支保護，靠流程自律）。
+- CI（`.github/workflows/ci.yml`）：gitleaks 機密掃描、cargo-deny（`deny.toml`）、格式＋Clippy（Linux）、卡表一致性＋測試（Windows）。只改 `docs/**`、`*.md` 時程式相關 job 會略過。
+- 本機 commit 前用 gitleaks 掃 staged 變更：`git config core.hooksPath .githooks`（每個 clone 做一次）。
+- 新增相依套件時確認授權在 `deny.toml` 的允許清單內。
 
 ## 慣例
 
