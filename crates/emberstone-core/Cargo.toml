@@ -4,6 +4,7 @@ description = "對局狀態與規則：事件佇列、觸發、光環、亂數�
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 emberstone-data.workspace = true

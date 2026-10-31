@@ -4,6 +4,7 @@ description = "卡片效果：戰吼、亡語、觸發、光環"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 emberstone-data.workspace = true

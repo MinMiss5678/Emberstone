@@ -4,6 +4,7 @@ description = "卡片資料：數值、關鍵字、台版卡名（卡表由 embe
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 
