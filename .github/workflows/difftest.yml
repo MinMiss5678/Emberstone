@@ -56,7 +56,9 @@ jobs:
           key: rosetta-${{ env.ROSETTA_SHA }}-${{ hashFiles('tools/rosetta-bridge/patches/**', 'tools/rosetta-bridge/shim/**') }}
 
       - name: 安裝 Ninja
-        run: pip install ninja
+        run: |
+          pip install ninja
+          python -c "import ninja; print(ninja.BIN_DIR)" >> "$GITHUB_PATH"
 
       - name: 編譯橋接程式
         shell: cmd

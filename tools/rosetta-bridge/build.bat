@@ -19,7 +19,10 @@ set "SRC=%ROSETTA_ROOT%\RosettaStone"
 set "ROSETTA_COMMIT=1690208"
 set "PATCHES=0001-build-options.patch;0002-rng-call-sites.patch;0003-fix-adjacent-aura-use-after-free.patch"
 
+rem vcvars may overwrite VCPKG_ROOT with the copy bundled in Visual Studio, so keep ours
+set "MY_VCPKG_ROOT=%VCPKG_ROOT%"
 call "%VCVARS%" >nul || exit /b 1
+set "VCPKG_ROOT=%MY_VCPKG_ROOT%"
 if exist "%ROSETTA_ROOT%\.tools\Scripts" set "PATH=%ROSETTA_ROOT%\.tools\Scripts;%PATH%"
 cd /d "%SRC%" || exit /b 1
 
