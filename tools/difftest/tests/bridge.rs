@@ -224,3 +224,112 @@ fn c4_run_command_reports_consistent_games() {
     );
     assert!(stdout.contains("一致 2/2"), "{stdout}");
 }
+
+// 第 1 階段 B2（橋接程式）：後手第 1 回合使用幸運幣 → 可用法力 2/1
+#[test]
+fn stage1_b2_coin_adds_one_mana() {
+    let mut b = bridge();
+    b.new_game(&setup(RngMode::Record { seed: 7 })).unwrap();
+    let s = b.act(&Action::End).unwrap();
+    let coin = s.players[1]
+        .hand
+        .iter()
+        .position(|c| c == "GAME_005")
+        .expect("後手應該有幸運幣");
+    let s = b.act(&cast(coin)).unwrap();
+    assert_eq!(
+        (s.players[1].mana.available, s.players[1].mana.total),
+        (2, 1)
+    );
+}
+
+// 第 1 階段 G4：10/10 時使用幸運幣 → 11（patch 0004，照現行規則）
+#[test]
+fn stage1_g4_coin_exceeds_ten() {
+    let mut b = bridge();
+    let mut s = b.new_game(&setup(RngMode::Record { seed: 7 })).unwrap();
+    while s.turn < 20 {
+        s = b.act(&Action::End).unwrap();
+    }
+    let p2 = &s.players[1];
+    assert_eq!((p2.mana.available, p2.mana.total), (10, 10));
+    let coin = p2
+        .hand
+        .iter()
+        .position(|c| c == "GAME_005")
+        .expect("幸運幣還在");
+    let s = b.act(&cast(coin)).unwrap();
+    assert_eq!(
+        (s.players[1].mana.available, s.players[1].mana.total),
+        (11, 10)
+    );
+}
+
+// 第 1 階段 B5（橋接程式）：快照的疲勞累計照實回報（第 1 次 1、第 2 次 2）
+#[test]
+fn stage1_b5_snapshot_reports_fatigue() {
+    let mut b = bridge();
+    let mut s = b.new_game(&setup(RngMode::Record { seed: 7 })).unwrap();
+    while s.players[1].hero.health == 30 {
+        s = b.act(&Action::End).unwrap();
+    }
+    assert_eq!((s.players[1].hero.health, s.players[1].fatigue), (29, 1));
+    s = b.act(&Action::End).unwrap();
+    assert_eq!((s.players[0].hero.health, s.players[0].fatigue), (29, 1));
+    s = b.act(&Action::End).unwrap();
+    assert_eq!((s.players[1].hero.health, s.players[1].fatigue), (27, 2));
+}
+
+// 第 1 階段 C3（橋接程式）：剛出場的衝刺手下，合法行動裡沒有攻擊英雄
+#[test]
+fn stage1_c3_rush_options_exclude_hero() {
+    let mut b = bridge();
+    let rush = GameSetup {
+        p1: PlayerSetup {
+            class: "MAGE".into(),
+            deck: deck(&["CS3_038"]),
+        },
+        p2: PlayerSetup {
+            class: "WARRIOR".into(),
+            deck: p2_deck(),
+        },
+        rng: RngMode::Record { seed: 7 },
+    };
+    b.new_game(&rush).unwrap();
+    b.act(&Action::End).unwrap();
+    b.act(&Action::End).unwrap();
+    b.act(&play_minion(0, 0)).unwrap();
+    let attacks: Vec<Action> = b
+        .options()
+        .unwrap()
+        .into_iter()
+        .filter(|a| matches!(a, Action::Attack { .. }))
+        .collect();
+    assert!(attacks.is_empty(), "{attacks:?}");
+}
+
+// 第 1 階段 G2、G3：Emberstone 和 RosettaStone 在純關鍵字卡池上逐步一致
+#[test]
+fn stage1_g2_emberstone_matches_rosetta() {
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_difftest"))
+        .args([
+            "run",
+            "--engine",
+            "emberstone",
+            "--pool",
+            "keywords",
+            "--games",
+            "3",
+            "--seed",
+            "1",
+        ])
+        .output()
+        .expect("執行 difftest 失敗");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "stdout: {stdout}\nstderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(stdout.contains("一致 3/3"), "{stdout}");
+}

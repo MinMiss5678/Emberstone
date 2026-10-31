@@ -43,6 +43,7 @@ dependencies = [
 name = "emberstone-difftest"
 version = "0.1.0"
 dependencies = [
+ "emberstone-core",
  "emberstone-data",
  "serde",
  "serde_json",

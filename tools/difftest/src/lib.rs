@@ -3,6 +3,8 @@
 pub mod actions;
 pub mod batches;
 pub mod bridge;
+pub mod emberstone;
 pub mod generate;
+pub mod pool;
 pub mod rng;
 pub mod snapshot;

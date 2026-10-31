@@ -17,7 +17,7 @@ if "%VCVARS%"=="" (
 set "BRIDGE_DIR=%~dp0"
 set "SRC=%ROSETTA_ROOT%\RosettaStone"
 set "ROSETTA_COMMIT=1690208"
-set "PATCHES=0001-build-options.patch;0002-rng-call-sites.patch;0003-fix-adjacent-aura-use-after-free.patch"
+set "PATCHES=0001-build-options.patch;0002-rng-call-sites.patch;0003-fix-adjacent-aura-use-after-free.patch;0004-coin-temp-mana.patch"
 
 rem vcvars may overwrite VCPKG_ROOT with the copy bundled in Visual Studio, so keep ours
 set "MY_VCPKG_ROOT=%VCPKG_ROOT%"
@@ -33,7 +33,7 @@ if not "%HEAD%"=="%ROSETTA_COMMIT%" (
 )
 
 rem Apply patches (skip the ones already applied)
-for %%p in (0001-build-options.patch 0002-rng-call-sites.patch 0003-fix-adjacent-aura-use-after-free.patch) do (
+for %%p in (0001-build-options.patch 0002-rng-call-sites.patch 0003-fix-adjacent-aura-use-after-free.patch 0004-coin-temp-mana.patch) do (
     git apply --check -R --ignore-whitespace "%BRIDGE_DIR%patches\%%p" 2>nul && (
         echo %%p already applied
     ) || (
