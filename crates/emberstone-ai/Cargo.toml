@@ -1,6 +1,6 @@
 [package]
 name = "emberstone-ai"
-description = "AI：巫妖王 AI、我方規則 AI、搜尋 AI"
+description = "AI：規則 AI、搜尋 AI、學習式評估"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true

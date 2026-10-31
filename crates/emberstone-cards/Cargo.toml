@@ -1,6 +1,6 @@
 [package]
 name = "emberstone-cards"
-description = "卡片效果：戰吼、亡語、觸發、光環，以及巫妖王等頭目卡"
+description = "卡片效果：戰吼、亡語、觸發、光環"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
