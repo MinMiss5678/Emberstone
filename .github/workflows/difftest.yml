@@ -9,6 +9,11 @@ on:
       - "tools/difftest/**"
       - "data/batches.tsv"
       - ".github/workflows/difftest.yml"
+      # difftest 組牌時查 emberstone-data 的卡片資料；相依套件與工具鏈版本也會影響結果
+      - "crates/emberstone-data/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
   workflow_dispatch:
     inputs:
       games:
