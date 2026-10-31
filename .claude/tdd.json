@@ -1,0 +1,22 @@
+{
+  "test_globs": [
+    "crates/*/tests/**/*.rs",
+    "crates/*/src/**/tests.rs",
+    "crates/*/src/**/tests/**/*.rs"
+  ],
+  "impl_globs": [
+    "crates/*/src/**/*.rs",
+    "crates/*/build.rs"
+  ],
+  "ignore_globs": [
+    "target/**"
+  ],
+  "test_command_regex": "(^|[;&|]\\s*)cargo\\s+(\\+\\S+\\s+)?test\\b",
+  "language": "rust",
+  "mcp_server": "rustrover",
+  "code_extensions": [".rs"],
+  "migration_command_regex": "(^|[;&|]\\s*)cargo\\s+run\\b.*-p\\s+emberstone-data\\b",
+  "migration_globs": [
+    "crates/emberstone-data/src/generated/**"
+  ]
+}

@@ -1,0 +1,9 @@
+[package]
+name = "emberstone-core"
+description = "對局狀態與規則：事件佇列、觸發、光環、亂數、合法行動列舉、複製"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+emberstone-data.workspace = true

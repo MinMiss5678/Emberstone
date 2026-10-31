@@ -1,0 +1,5 @@
+# 固定 Rust 版本，讓 Windows、WSL 和 RustRover 編出一樣的結果
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

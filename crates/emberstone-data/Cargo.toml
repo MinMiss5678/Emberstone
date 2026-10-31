@@ -1,0 +1,8 @@
+[package]
+name = "emberstone-data"
+description = "卡片資料：數值、關鍵字、台版卡名，以及從 HearthstoneJSON 產生卡表的工具"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]

@@ -1,0 +1,26 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/emberstone-data",
+    "crates/emberstone-core",
+    "crates/emberstone-cards",
+    "crates/emberstone-ai",
+    "crates/emberstone-sim",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# 各 crate 共用的內部相依（單向：data → core → cards → ai → sim）
+[workspace.dependencies]
+emberstone-data = { path = "crates/emberstone-data" }
+emberstone-core = { path = "crates/emberstone-core" }
+emberstone-cards = { path = "crates/emberstone-cards" }
+emberstone-ai = { path = "crates/emberstone-ai" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
