@@ -59,13 +59,6 @@ jobs:
           path: tools/rosetta-bridge/build/rosetta-bridge.exe
           key: bridge-${{ env.ROSETTA_SHA }}-${{ hashFiles('tools/rosetta-bridge/**') }}
 
-      - name: 快取 RosettaStone 編譯結果
-        if: steps.bridge-cache.outputs.cache-hit != 'true'
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/rosetta/RosettaStone/build
-          key: rosetta-${{ env.ROSETTA_SHA }}-${{ hashFiles('tools/rosetta-bridge/patches/**', 'tools/rosetta-bridge/shim/**') }}
-
       - name: 安裝 Ninja
         if: steps.bridge-cache.outputs.cache-hit != 'true'
         run: |
