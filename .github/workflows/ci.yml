@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      # 版本由 rust-toolchain.toml 固定，rustup 會自動安裝
+      - name: 安裝 Rust 工具鏈
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: 下載固定版本的卡片資料
+        run: |
+          BUILD=$(sed -n 1p data/hsjson_build.txt)
+          SHA1=$(sed -n 2p data/hsjson_build.txt)
+          curl -fsSL "https://api.hearthstonejson.com/v1/$BUILD/zhTW/cards.json" -o data/tw_all.json
+          echo "$SHA1  data/tw_all.json" | sha1sum -c -
+
+      - name: 格式檢查
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: 卡表與卡片資料一致
+        run: |
+          cargo run -p emberstone-cardgen --bin gen-cards
+          git diff --exit-code -- crates/emberstone-data/src/generated/
+
+      - name: 測試
+        run: cargo test --workspace
