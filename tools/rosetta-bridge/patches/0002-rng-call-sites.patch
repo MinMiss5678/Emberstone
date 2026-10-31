@@ -1,4 +1,4 @@
-﻿diff --git a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DiscardTask.cpp b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DiscardTask.cpp
+diff --git a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DiscardTask.cpp b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DiscardTask.cpp
 --- a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DiscardTask.cpp
 +++ b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DiscardTask.cpp
 @@ -38,7 +38,6 @@

@@ -15,6 +15,11 @@ tools\rosetta-bridge\build.bat
 
 輸出 `tools/rosetta-bridge/build/rosetta-bridge.exe`（不納入 git）。RosettaStone 函式庫以 `/GL` 編譯，連結很慢（約 5–10 分鐘）。
 
+## 編碼規則
+
+- 檔案一律 UTF-8、不加 BOM。
+- **會被 RosettaStone include 的檔案（`shim/`）整個只用 ASCII，註解也一樣**：RosettaStone 不以 `/utf-8` 編譯，MSVC 會用主機的程式碼頁讀原始碼（本機 950、GitHub 主機 1252）。在 950 下，沒有 BOM 的 UTF-8 中文註解會被當成雙位元組字元，吃掉後面的字元，造成語法錯誤；在 1252 下，中文字串常值會編譯失敗。`bridge.cpp` 以 `/utf-8` 編譯，不受此限。
+
 ## 對 RosettaStone 的修改
 
 不改上游原始碼的檔案內容，改用：

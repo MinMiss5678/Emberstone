@@ -71,4 +71,4 @@ Cargo workspace，**相依只能單向**：data → core → cards → ai → si
 
 ## 慣例
 
-文件、註解、報告一律繁體中文（台灣用語），使用台版卡名。
+文件、註解、報告一律繁體中文（台灣用語），使用台版卡名。檔案一律 UTF-8、不加 BOM（RustRover 的 File Encodings 設為「with NO BOM」；`.idea/` 不在 git，每台機器各自設定）。

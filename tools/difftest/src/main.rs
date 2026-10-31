@@ -1,4 +1,4 @@
-﻿//! difftest：卡片批次分類與差分測試驗收。
+//! difftest：卡片批次分類與差分測試驗收。
 //!
 //! - `difftest batches --rosetta <RosettaStone 原始碼目錄> [--en data/en_all.json] [--out data/batches.tsv]`
 //! - `difftest run --batch A --games N --seed S`：用指定批次的卡組隨機牌組，
