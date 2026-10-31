@@ -41,7 +41,7 @@ Cargo workspace，相依只有一個方向：data → core → cards → ai → 
 | `emberstone-ai` | 隨機、規則 AI、搜尋 AI（決定化＋MCTS）、學習式評估的推論端 |
 | `emberstone-sim` | 命令列：對戰模擬、牌組勝率矩陣、速度量測、報告（繁體中文） |
 | `emberstone-py` | **必要**：PyO3 模組，提供 Gym 風格環境（reset／step／合法行動遮罩／特徵）、批次平行模擬；訓練與 LLM 代理在 Python 端 |
-| `tools/` | 差分測試工具：RosettaStone 橋接程式（C++，WSL 編譯，加上亂數指定與狀態輸出）與比對程式；詳細拆法在第 0 階段 case 表定案 |
+| `tools/` | 差分測試工具：RosettaStone 橋接程式（C++，Windows 上以 MSVC 編譯，加上亂數指定與狀態輸出）與比對程式；詳細拆法在第 0 階段 case 表定案 |
 
 外部套件盡量少：core、cards、ai 不用外部套件；data 產生工具用 serde／serde_json；sim 用 clap、mimalloc（選用）；py 用 pyo3。
 
@@ -87,7 +87,7 @@ Cargo workspace，相依只有一個方向：data → core → cards → ai → 
 
 ## 7. 已決定
 - 名稱：Emberstone；位置：`C:\Users\jerem\RustroverProjects\Emberstone`；本機 git。
-- 環境：Windows 原生（MSVC、Rust 1.99.1），RustRover 開發，編輯與測試走 RustRover MCP；效能分析在 WSL。RosettaStone 在 WSL 編譯。
+- 環境：Windows 原生（MSVC、Rust 1.99.1），RustRover 開發，編輯與測試走 RustRover MCP；RosettaStone 與效能分析都在 Windows 原生進行（效能分析預定用 samply，第 1 階段實測）。不使用 WSL。
 - test-first 稽核已啟用（`.claude/tdd.json`）。
 - 範圍：現行標準模式、先做能對照的卡；巫妖王完全移出；要有 LLM 代理。
 - 參考引擎：RosettaStone；差分測試工具放在本專案 `tools/`。

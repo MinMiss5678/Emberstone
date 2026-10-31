@@ -1,0 +1,25 @@
+# 相依套件更新：每週一次，minor／patch 合成一個 PR，走一般 CI 驗證後再合併。
+# Cargo 不自動開 major PR（破壞性升級要另外規劃）；GitHub Actions 的 major 保留（CI 自己驗得到）。
+# 資安更新不受 schedule 限制，發現漏洞就立即開 PR。
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      cargo-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        update-types: [minor, patch]
