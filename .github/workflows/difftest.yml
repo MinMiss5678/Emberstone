@@ -49,18 +49,31 @@ jobs:
           git fetch -q --depth 1 origin "$ROSETTA_SHA"
           git checkout -q FETCH_HEAD
 
+      # 編好的橋接程式只取決於 RosettaStone 版本與 tools/rosetta-bridge/ 的內容；
+      # 這些沒變（例如只改引擎、卡表、difftest）就直接重用，跳過約 9 分鐘的編譯。
+      # 橋接程式內含 RosettaStone 卡表的絕對路徑，所以上面的原始碼仍要取回（只花幾秒）。
+      - name: 快取編好的橋接程式
+        id: bridge-cache
+        uses: actions/cache@v4
+        with:
+          path: tools/rosetta-bridge/build/rosetta-bridge.exe
+          key: bridge-${{ env.ROSETTA_SHA }}-${{ hashFiles('tools/rosetta-bridge/**') }}
+
       - name: 快取 RosettaStone 編譯結果
+        if: steps.bridge-cache.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/rosetta/RosettaStone/build
           key: rosetta-${{ env.ROSETTA_SHA }}-${{ hashFiles('tools/rosetta-bridge/patches/**', 'tools/rosetta-bridge/shim/**') }}
 
       - name: 安裝 Ninja
+        if: steps.bridge-cache.outputs.cache-hit != 'true'
         run: |
           pip install ninja
           python -c "import ninja; print(ninja.BIN_DIR)" >> "$GITHUB_PATH"
 
       - name: 編譯橋接程式
+        if: steps.bridge-cache.outputs.cache-hit != 'true'
         shell: cmd
         env:
           ROSETTA_ROOT: ${{ runner.temp }}\rosetta
