@@ -1,4 +1,4 @@
-﻿//! 卡片批次分類：比對我們的卡和 RosettaStone 已實作的卡。
+//! 卡片批次分類：比對我們的卡和 RosettaStone 已實作的卡。
 
 use std::collections::{BTreeSet, HashMap};
 

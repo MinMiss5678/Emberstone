@@ -1,4 +1,4 @@
-﻿// RosettaStone 橋接程式（差分測試用，case R1–R3、R5、I1–I5、S1）。
+// RosettaStone 橋接程式（差分測試用，case R1–R3、R5、I1–I5、S1）。
 // 協定：stdin 每行一個 JSON 請求，stdout 每行一個 JSON 回應。
 //   {"cmd":"version"} | {"cmd":"new",...} | {"cmd":"options"} | {"cmd":"act","action":{...}}
 //   {"cmd":"snapshot"} | {"cmd":"events"} | {"cmd":"quit"}

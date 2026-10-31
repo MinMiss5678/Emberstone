@@ -1,7 +1,12 @@
-﻿// Emberstone 差分測試用：取代 effolkronium::random_static（case R1–R3）。
-// 編譯 RosettaStone 與橋接程式時把這個目錄放在 include 路徑最前面，
-// RosettaStone 所有 `Random::...` 呼叫就會改走這裡：記錄模式記下每次抽亂數，重播模式照序列回傳。
-// 從 n 個中挑一個也記成 Int{0, n-1}，和 Emberstone 端的 ScriptedRng 對應。
+// Emberstone difftest: replacement for effolkronium::random_static (cases R1-R3).
+// This directory goes first on the include path when building RosettaStone and the bridge,
+// so every `Random::...` call in RosettaStone comes here: record mode logs each random draw,
+// replay mode returns the logged results in order.
+// Picking one of n is logged as Int{0, n-1}, matching ScriptedRng on the Emberstone side.
+//
+// This file must stay ASCII-only: RosettaStone is compiled without /utf-8, so MSVC reads it
+// with the host code page (950 locally, 1252 on GitHub runners), and non-ASCII text (even in
+// comments) can break parsing.
 
 #pragma once
 
@@ -19,7 +24,7 @@
 
 namespace effolkronium
 {
-//! 一次抽亂數。
+//! One random draw.
 struct RngEvent
 {
     enum class Kind
@@ -56,7 +61,7 @@ class random_static
         engine().seed(s);
     }
 
-    //! 記錄模式：以種子初始化並清空事件。
+    //! Record mode: seed the engine and clear the events.
     static void StartRecord(std::uint64_t s)
     {
         State().replay = false;
@@ -66,7 +71,7 @@ class random_static
         engine().seed(s);
     }
 
-    //! 重播模式：之後的亂數照 events 依序回傳。
+    //! Replay mode: later draws return the results in `events` in order.
     static void StartReplay(std::vector<RngEvent> events)
     {
         State().replay = true;
@@ -80,8 +85,9 @@ class random_static
         return State().events;
     }
 
-    //! 重播時是否已經和序列不同步。不同步時不丟例外（RosettaStone 可能在 noexcept 的地方抽亂數），
-    //! 改回傳安全的預設值並記下第一次不同步的原因，由橋接程式在每個行動後檢查。
+    //! Whether replay has gone out of sync. No exception is thrown on desync (RosettaStone may
+    //! draw inside noexcept code); a safe default is returned and the first reason is kept,
+    //! and the bridge checks it after every action.
     static bool Desynced()
     {
         return !State().desync.empty();
@@ -92,7 +98,7 @@ class random_static
         return State().desync;
     }
 
-    //! 閉區間 [from, to] 的整數；from > to 時對調（和 effolkronium 相同）。
+    //! Integer in the closed range [from, to]; swapped when from > to (same as effolkronium).
     template <typename T>
     static std::enable_if_t<std::is_integral_v<T>, T> get(T from, T to)
     {
@@ -151,7 +157,7 @@ class random_static
         return static_cast<T>(e.fvalue);
     }
 
-    //! 從容器隨機挑一個；空容器回傳 end（不抽亂數）。
+    //! Random element of a container; returns end for an empty container (no draw).
     template <typename Container>
     static auto get(Container& container) -> decltype(std::begin(container))
     {
@@ -165,7 +171,7 @@ class random_static
         return std::next(std::begin(container), idx);
     }
 
-    //! 洗牌：perm[i] 為洗牌後第 i 個位置放的原位置。
+    //! Shuffle: after shuffling, position i holds the element originally at perm[i].
     template <typename RandomIt>
     static void shuffle(RandomIt first, RandomIt last)
     {
@@ -220,7 +226,7 @@ class random_static
         return state;
     }
 
-    //! 下一個事件（類型不符或已用完回傳 nullptr）。
+    //! The next event (nullptr if the kind differs or the sequence is used up).
     static const RngEvent* Next(RngEvent::Kind kind)
     {
         RngState& s = State();
@@ -236,7 +242,6 @@ class random_static
         RngState& s = State();
         if (s.desync.empty())
         {
-            // 訊息用 ASCII：RosettaStone 不以 /utf-8 編譯，非 UTF-8 程式碼頁的主機無法表示中文字串常值。
             s.desync = "rng desync at event " + std::to_string(s.next) + ", requested " + requested;
         }
     }

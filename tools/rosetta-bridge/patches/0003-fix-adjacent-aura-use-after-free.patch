@@ -1,4 +1,4 @@
-﻿Fix a use-after-free in RosettaStone 1690208 (found with AddressSanitizer):
+Fix a use-after-free in RosettaStone 1690208 (found with AddressSanitizer):
 a removed AdjacentAura is erased from Game::auras and then freed by
 Game::UpdateAura(), but FieldZone::m_adjacentAuras still holds the raw pointer,
 so the next FieldZone::Add() writes to freed memory.

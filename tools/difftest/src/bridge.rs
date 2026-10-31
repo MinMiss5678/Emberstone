@@ -1,4 +1,4 @@
-﻿//! 驅動 RosettaStone 橋接程式（tools/rosetta-bridge）：JSON lines，一行請求一行回應。
+//! 驅動 RosettaStone 橋接程式（tools/rosetta-bridge）：JSON lines，一行請求一行回應。
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;

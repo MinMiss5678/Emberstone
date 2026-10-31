@@ -1,4 +1,4 @@
-﻿//! 狀態快照（case S1）與比對。
+//! 狀態快照（case S1）與比對。
 
 use serde::{Deserialize, Serialize};
 
