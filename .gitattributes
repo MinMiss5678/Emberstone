@@ -1,0 +1,2 @@
+# 統一用 LF，讓 Windows、WSL、CI 的檔案位元組一致（卡表產生檔的一致性檢查靠它）
+* text=auto eol=lf

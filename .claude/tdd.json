@@ -15,7 +15,7 @@
   "language": "rust",
   "mcp_server": "rustrover",
   "code_extensions": [".rs"],
-  "migration_command_regex": "(^|[;&|]\\s*)cargo\\s+run\\b.*-p\\s+emberstone-data\\b",
+  "migration_command_regex": "(^|[;&|]\\s*)cargo\\s+run\\b.*-p\\s+emberstone-(data|cardgen)\\b",
   "migration_globs": [
     "crates/emberstone-data/src/generated/**"
   ]

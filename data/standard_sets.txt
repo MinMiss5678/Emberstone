@@ -1,0 +1,10 @@
+# 目前標準模式的卡片系列（HearthstoneJSON 的 set 代碼），一行一個；人工維護，每年輪替時更新。
+# EVENT：活動卡，隨所屬資料片一起輪替（輪替時移入 LEGACY），目前全部在標準模式。
+CORE
+EMERALD_DREAM
+THE_LOST_CITY
+TIME_TRAVEL
+CATACLYSM
+ESCAPEFROM_VIOLET_HOLD
+BE
+EVENT

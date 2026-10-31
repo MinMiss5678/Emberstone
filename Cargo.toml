@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/emberstone-data",
+    "crates/emberstone-cardgen",
     "crates/emberstone-core",
     "crates/emberstone-cards",
     "crates/emberstone-ai",
@@ -19,6 +20,9 @@ emberstone-data = { path = "crates/emberstone-data" }
 emberstone-core = { path = "crates/emberstone-core" }
 emberstone-cards = { path = "crates/emberstone-cards" }
 emberstone-ai = { path = "crates/emberstone-ai" }
+
+# 外部套件（只給卡表產生工具與測試用）
+serde_json = "1"
 
 [profile.release]
 opt-level = 3

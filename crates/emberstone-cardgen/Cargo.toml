@@ -1,0 +1,13 @@
+[package]
+name = "emberstone-cardgen"
+description = "卡表產生工具：讀 HearthstoneJSON，產生 emberstone-data 的卡表"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "gen-cards"
+path = "src/main.rs"
+
+[dependencies]
+serde_json.workspace = true
