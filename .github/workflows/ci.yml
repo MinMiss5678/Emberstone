@@ -59,7 +59,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
 
-  # 格式與 Clippy：純 Rust 檢查，放 Linux（私人 repo 的 Windows 分鐘數算兩倍）。
+  # 格式與 Clippy：純 Rust 檢查，放 Linux（啟動和編譯都比 Windows 主機快）。
   lint:
     needs: changes
     if: needs.changes.outputs.code == 'true'
