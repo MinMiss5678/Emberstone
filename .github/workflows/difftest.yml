@@ -1,6 +1,7 @@
 name: Difftest
 
-# 和 RosettaStone 的差分測試：要從原始碼編 RosettaStone（約 20–30 分鐘），所以不放在主要 CI。
+# 和 RosettaStone 的差分測試。橋接程式沒變時用快取（全程約 2 分鐘）；改到 tools/rosetta-bridge/
+# 才要從原始碼重編 RosettaStone（約 9 分鐘）。
 # 觸發：改到差分測試相關檔案的 PR、手動、每晚一次。不是 main 的必要檢查。
 on:
   pull_request:
