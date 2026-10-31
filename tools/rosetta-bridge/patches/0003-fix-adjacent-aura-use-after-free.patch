@@ -1,0 +1,48 @@
+﻿Fix a use-after-free in RosettaStone 1690208 (found with AddressSanitizer):
+a removed AdjacentAura is erased from Game::auras and then freed by
+Game::UpdateAura(), but FieldZone::m_adjacentAuras still holds the raw pointer,
+so the next FieldZone::Add() writes to freed memory.
+
+diff --git a/Includes/Rosetta/PlayMode/Zones/FieldZone.hpp b/Includes/Rosetta/PlayMode/Zones/FieldZone.hpp
+--- a/Includes/Rosetta/PlayMode/Zones/FieldZone.hpp
++++ b/Includes/Rosetta/PlayMode/Zones/FieldZone.hpp
+@@ -76,7 +76,11 @@
+     //! Registers an adjacent aura on this field.
+     //! \param aura The adjacent aura.
+     void AddAdjacentAura(AdjacentAura* aura);
+ 
++    //! Unregisters an adjacent aura from this field.
++    //! \param aura The adjacent aura.
++    void RemoveAdjacentAura(const AdjacentAura* aura);
++
+     //! Marks every adjacent aura for an update.
+     void MarkAdjacentAurasDirty() const;
+ 
+diff --git a/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp b/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
+--- a/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
++++ b/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
+@@ -205,7 +205,12 @@
+ void FieldZone::AddAdjacentAura(AdjacentAura* aura)
+ {
+     m_adjacentAuras.emplace_back(aura);
+ }
+ 
++void FieldZone::RemoveAdjacentAura(const AdjacentAura* aura)
++{
++    std::erase(m_adjacentAuras, aura);
++}
++
+ void FieldZone::MarkAdjacentAurasDirty() const
+ {
+diff --git a/Sources/Rosetta/PlayMode/Auras/AdjacentAura.cpp b/Sources/Rosetta/PlayMode/Auras/AdjacentAura.cpp
+--- a/Sources/Rosetta/PlayMode/Auras/AdjacentAura.cpp
++++ b/Sources/Rosetta/PlayMode/Auras/AdjacentAura.cpp
+@@ -50,7 +50,8 @@
+         }
+ 
+         m_owner->ongoingEffect = nullptr;
++        m_fieldZone->RemoveAdjacentAura(this);
+         EraseIf(m_owner->game->auras,
+                 [this](const IAura* aura) { return aura == this; });
+ 
+         return;

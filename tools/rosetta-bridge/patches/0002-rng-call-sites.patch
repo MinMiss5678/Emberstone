@@ -1,0 +1,35 @@
+﻿diff --git a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DiscardTask.cpp b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DiscardTask.cpp
+--- a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DiscardTask.cpp
++++ b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DiscardTask.cpp
+@@ -38,7 +38,6 @@
+     {
+         case DiscardType::DEFAULT:
+         case DiscardType::ENEMY_MINION:
+-            std::shuffle(handCards.begin(), handCards.end(),
+-                         Random::get_engine());
++            Random::shuffle(handCards.begin(), handCards.end());
+             break;
+         case DiscardType::LOWEST_COST:
+diff --git a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DrawMinionTask.cpp b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DrawMinionTask.cpp
+--- a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DrawMinionTask.cpp
++++ b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DrawMinionTask.cpp
+@@ -51,7 +51,6 @@
+     switch (m_drawMinionType)
+     {
+         case DrawMinionType::DEFAULT:
+-            std::shuffle(deckCards.begin(), deckCards.end(),
+-                         Random::get_engine());
++            Random::shuffle(deckCards.begin(), deckCards.end());
+             break;
+         case DrawMinionType::LOWEST_COST:
+diff --git a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DrawSpellTask.cpp b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DrawSpellTask.cpp
+--- a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DrawSpellTask.cpp
++++ b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DrawSpellTask.cpp
+@@ -77,6 +77,6 @@
+     switch (m_drawSpellType)
+     {
+         case DrawSpellType::DEFAULT:
+-            std::ranges::shuffle(deckCards, Random::get_engine());
++            Random::shuffle(deckCards);
+             break;
+         case DrawSpellType::HIGHEST_COST:

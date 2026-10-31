@@ -1,0 +1,85 @@
+name: Difftest
+
+# 和 RosettaStone 的差分測試：要從原始碼編 RosettaStone（約 20–30 分鐘），所以不放在主要 CI。
+# 觸發：改到差分測試相關檔案的 PR、手動、每晚一次。不是 main 的必要檢查。
+on:
+  pull_request:
+    paths:
+      - "tools/rosetta-bridge/**"
+      - "tools/difftest/**"
+      - "data/batches.tsv"
+      - ".github/workflows/difftest.yml"
+  workflow_dispatch:
+    inputs:
+      games:
+        description: 隨機對局數
+        default: "100"
+  schedule:
+    - cron: "0 18 * * *" # 台灣時間每天 02:00
+
+concurrency:
+  group: difftest-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  ROSETTA_SHA: 16902087454f8055c991474774922fd39f7d0875
+
+jobs:
+  difftest:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+
+      - name: 取得固定版本的 RosettaStone
+        run: |
+          mkdir -p "$RUNNER_TEMP/rosetta/RosettaStone"
+          cd "$RUNNER_TEMP/rosetta/RosettaStone"
+          git init -q
+          git remote add origin https://github.com/utilForever/RosettaStone.git
+          git fetch -q --depth 1 origin "$ROSETTA_SHA"
+          git checkout -q FETCH_HEAD
+
+      - name: 快取 RosettaStone 編譯結果
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/rosetta/RosettaStone/build
+          key: rosetta-${{ env.ROSETTA_SHA }}-${{ hashFiles('tools/rosetta-bridge/patches/**', 'tools/rosetta-bridge/shim/**') }}
+
+      - name: 安裝 Ninja
+        run: pip install ninja
+
+      - name: 編譯橋接程式
+        shell: cmd
+        env:
+          ROSETTA_ROOT: ${{ runner.temp }}\rosetta
+        run: |
+          set "VCPKG_ROOT=%VCPKG_INSTALLATION_ROOT%"
+          call tools\rosetta-bridge\build.bat
+
+      - name: 橋接程式測試
+        run: cargo test -p emberstone-difftest --test bridge
+
+      - name: 隨機對局差分（記錄與重播比對）
+        run: |
+          GAMES="${{ github.event.inputs.games || '100' }}"
+          cargo run --release -p emberstone-difftest --bin difftest -- \
+            run --batch A --games "$GAMES" --seed "${{ github.run_number }}" > difftest.txt || true
+          {
+            echo '## 差分測試（批次 A）'
+            echo '```'
+            grep -v '：一致$' difftest.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat difftest.txt
+          # RosettaStone 本身的錯誤（逾時、當機）只回報；出現「不一致」才算失敗
+          if grep -q '：不一致' difftest.txt; then exit 1; fi

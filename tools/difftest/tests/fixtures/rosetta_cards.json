@@ -1,0 +1,59 @@
+[
+ {
+  "artist": "Marcelo Vignali",
+  "cardClass": "PRIEST",
+  "collectible": true,
+  "cost": 1,
+  "dbfId": 69707,
+  "flavor": "Flash!  Ahhhhhhh~",
+  "howToEarn": "Unlocked at level 3.",
+  "howToEarnGolden": "Unlocked after winning 50 games as Priest.",
+  "id": "CORE_AT_055",
+  "name": "Flash Heal",
+  "rarity": "COMMON",
+  "set": "CORE",
+  "spellSchool": "HOLY",
+  "text": "Restore #5 Health.",
+  "type": "SPELL"
+ },
+ {
+  "artist": "Konstantin Turovec",
+  "cardClass": "PRIEST",
+  "collectible": true,
+  "cost": 3,
+  "dbfId": 62875,
+  "flavor": "\"How’d we miss this one in Uldum?\" —Rafaam",
+  "id": "BAR_311",
+  "mechanics": [
+   "LIFESTEAL",
+   "ImmuneToSpellpower"
+  ],
+  "name": "Devouring Plague",
+  "rarity": "COMMON",
+  "set": "THE_BARRENS",
+  "spellSchool": "SHADOW",
+  "text": "[x]<b>Lifesteal</b>. Deal $4 damage\nrandomly split among\nall enemy minions.",
+  "type": "SPELL"
+ },
+ {
+  "artist": "J. Axer",
+  "attack": 2,
+  "cardClass": "DEMONHUNTER",
+  "collectible": true,
+  "cost": 3,
+  "dbfId": 69507,
+  "durability": 2,
+  "flavor": "The ancient Aldrachi were the greatest warriors in the universe. Imagine their power if they'd put the handle at the END of the blade.",
+  "howToEarn": "Unlocked at level 1.",
+  "howToEarnGolden": "Unlocked after winning 50 games as Demon Hunter.",
+  "id": "CORE_BT_921",
+  "mechanics": [
+   "LIFESTEAL"
+  ],
+  "name": "Aldrachi Warblades",
+  "rarity": "COMMON",
+  "set": "CORE",
+  "text": "<b>Lifesteal</b>",
+  "type": "WEAPON"
+ }
+]

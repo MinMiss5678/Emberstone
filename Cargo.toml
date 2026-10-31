@@ -7,6 +7,7 @@ members = [
     "crates/emberstone-cards",
     "crates/emberstone-ai",
     "crates/emberstone-sim",
+    "tools/difftest",
 ]
 
 [workspace.package]
@@ -22,7 +23,8 @@ emberstone-core = { path = "crates/emberstone-core" }
 emberstone-cards = { path = "crates/emberstone-cards" }
 emberstone-ai = { path = "crates/emberstone-ai" }
 
-# 外部套件（只給卡表產生工具與測試用）
+# 外部套件（只給卡表產生工具、差分測試工具與測試用）
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [profile.release]
