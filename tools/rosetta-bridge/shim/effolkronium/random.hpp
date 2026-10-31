@@ -236,7 +236,8 @@ class random_static
         RngState& s = State();
         if (s.desync.empty())
         {
-            s.desync = "亂數不同步：第 " + std::to_string(s.next) + " 個事件，要求 " + requested;
+            // 訊息用 ASCII：RosettaStone 不以 /utf-8 編譯，非 UTF-8 程式碼頁的主機無法表示中文字串常值。
+            s.desync = "rng desync at event " + std::to_string(s.next) + ", requested " + requested;
         }
     }
 };
