@@ -4,6 +4,7 @@ description = "AI：規則 AI、搜尋 AI、學習式評估"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 emberstone-core.workspace = true
