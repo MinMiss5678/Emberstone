@@ -1,4 +1,4 @@
-﻿//! 狀態比對與隨機對局產生（case C1–C3）。
+//! 狀態比對與隨機對局產生（case C1–C3）。
 
 use emberstone_difftest::actions::Action;
 use emberstone_difftest::generate::{OptionSource, random_actions};

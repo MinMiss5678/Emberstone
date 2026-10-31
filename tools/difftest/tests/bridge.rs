@@ -1,4 +1,4 @@
-﻿//! RosettaStone 橋接程式（case R1–R3、R5、I1–I5、S1、C4）。
+//! RosettaStone 橋接程式（case R1–R3、R5、I1–I5、S1、C4）。
 //! 需要先編好橋接程式（tools/rosetta-bridge/build.bat）；主要 CI 不跑這個測試檔。
 //! 橋接程式位置可用環境變數 EMBERSTONE_ROSETTA_BRIDGE 指定。
 

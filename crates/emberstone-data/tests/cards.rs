@@ -1,4 +1,4 @@
-﻿//! 卡表內容（case D1–D8、D11）。期望值取自 HearthstoneJSON 現行資料（2026-10-19 下載）。
+//! 卡表內容（case D1–D8、D11）。期望值取自 HearthstoneJSON 現行資料（2026-10-19 下載）。
 
 use emberstone_data::{
     CardClass, CardType, Keyword, Rarity, RuneCost, all_cards, card_by_dbf_id, card_by_id,
