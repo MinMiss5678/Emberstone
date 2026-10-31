@@ -120,6 +120,15 @@ fn opt_i64(c: &Value, key: &str) -> String {
 }
 
 fn write_card(out: &mut String, c: &Value, unknown: &mut BTreeSet<String>) {
+    let durability = |c: &Value| -> String {
+        // 來源把武器耐久度放在 health，durability 是 0。
+        let v = c.get("durability").and_then(Value::as_i64).unwrap_or(0);
+        if v == 0 && c.get("type").and_then(Value::as_str) == Some("WEAPON") {
+            opt_i64(c, "health")
+        } else {
+            opt_i64(c, "durability")
+        }
+    };
     let s = |k: &str| str_field(c, k).unwrap_or("");
     let class = str_field(c, "cardClass")
         .map_or("None".to_string(), |v| format!("Some({})", class_expr(v)));
@@ -179,7 +188,7 @@ fn write_card(out: &mut String, c: &Value, unknown: &mut BTreeSet<String>) {
         opt_i64(c, "cost"),
         opt_i64(c, "attack"),
         opt_i64(c, "health"),
-        opt_i64(c, "durability"),
+        durability(c),
         opt_i64(c, "armor"),
         rarity,
         s("set"),

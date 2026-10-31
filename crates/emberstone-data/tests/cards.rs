@@ -143,3 +143,15 @@ fn d11_standard_sets() {
     assert!(card_by_id("CORE_EX1_012").unwrap().is_standard());
     assert!(!card_by_id("CS2_029").unwrap().is_standard());
 }
+
+// 第 1 階段 C4a：奧達奇戰刃 3 費 2/2，耐久度 2
+#[test]
+fn stage1_c4a_aldrachi_warblades_durability() {
+    let c = card_by_id("CORE_BT_921").expect("查不到 CORE_BT_921");
+    assert_eq!(c.name, "奧達奇戰刃");
+    assert_eq!(c.card_type, CardType::Weapon);
+    assert_eq!(
+        (c.cost, c.attack, c.durability),
+        (Some(3), Some(2), Some(2))
+    );
+}

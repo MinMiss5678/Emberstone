@@ -32,3 +32,18 @@ fn d10_unknown_keyword_becomes_other_and_is_reported() {
     assert_eq!(out.unknown_keywords, vec!["FOO_BAR".to_string()]);
     assert!(out.report.contains("FOO_BAR"));
 }
+
+// 第 1 階段 C4a：來源把武器耐久度放在 health、durability 是 0，產生時要改放到 durability
+#[test]
+fn stage1_c4a_weapon_durability_comes_from_health() {
+    const WEAPON: &str = r#"[
+  {"id": "TEST_W01", "dbfId": 9, "name": "測試武器", "set": "CORE", "type": "WEAPON",
+   "cardClass": "WARRIOR", "cost": 3, "attack": 2, "health": 2, "durability": 0}
+]"#;
+    let out = generate(WEAPON, STANDARD).expect("產生失敗");
+    assert!(
+        out.cards_rs.contains("durability: Some(2)"),
+        "{}",
+        out.cards_rs
+    );
+}

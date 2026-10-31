@@ -86,7 +86,7 @@ pub struct RuneCost {
 }
 
 /// 一張卡的靜態資料。
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Card {
     pub id: &'static str,
     pub dbf_id: u32,
