@@ -1,4 +1,4 @@
-﻿//! Emberstone 端「指定亂數」（case R4）。
+//! Emberstone 端「指定亂數」（case R4）。
 
 use emberstone_difftest::rng::{RngEvent, ScriptedRng};
 

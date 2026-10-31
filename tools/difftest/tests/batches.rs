@@ -1,4 +1,4 @@
-﻿//! 卡片批次分類（case B1–B5）。夾具取自 HearthstoneJSON build 255790 與 RosettaStone commit 1690208 的真實資料。
+//! 卡片批次分類（case B1–B5）。夾具取自 HearthstoneJSON build 255790 與 RosettaStone commit 1690208 的真實資料。
 
 use emberstone_difftest::batches::{Batch, Row, classify, implemented_ids, parse_tsv, to_tsv};
 

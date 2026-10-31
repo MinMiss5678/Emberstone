@@ -1,4 +1,4 @@
-﻿//! 產生器行為（case D9、D10）。
+//! 產生器行為（case D9、D10）。
 
 use emberstone_cardgen::generate;
 
