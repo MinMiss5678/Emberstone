@@ -62,7 +62,8 @@ Cargo workspace，**相依只能單向**：data → core → cards → ai → si
 
 ## Git 與 CI
 
-- GitHub 私人 repo `MinMiss5678/Emberstone`，預設分支 `main`。每段工作開分支、推上去開 PR，CI 通過、使用者看過再合併；不直接推 `main`（免費方案的私人 repo 不能設分支保護，靠流程自律）。
+- GitHub **公開** repo `MinMiss5678/Emberstone`，預設分支 `main`。`main` 有分支保護（管理員也適用）：只能透過 PR 合併，`changes`、`secrets`、`deny`、`lint`、`test` 五項檢查都要通過。每段工作開分支、推上去開 PR，使用者看過再合併。
+- repo 是公開的：不要把金鑰、個人資料、收藏內容寫進 commit。GitHub 的機密掃描與推送保護已開啟。
 - CI（`.github/workflows/ci.yml`）：gitleaks 機密掃描、cargo-deny（`deny.toml`）、格式＋Clippy（Linux）、卡表一致性＋測試（Windows）。只改 `docs/**`、`*.md` 時程式相關 job 會略過。
 - 本機 commit 前用 gitleaks 掃 staged 變更：`git config core.hooksPath .githooks`（每個 clone 做一次）。
 - 新增相依套件時確認授權在 `deny.toml` 的允許清單內。
