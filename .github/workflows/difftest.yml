@@ -62,7 +62,7 @@ jobs:
       # 橋接程式內含 RosettaStone 卡表的絕對路徑，所以上面的原始碼仍要取回（只花幾秒）。
       - name: 快取編好的橋接程式
         id: bridge-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: tools/rosetta-bridge/build/rosetta-bridge.exe
           key: bridge-${{ env.ROSETTA_SHA }}-${{ hashFiles('tools/rosetta-bridge/**') }}
