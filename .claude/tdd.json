@@ -3,7 +3,7 @@
     "crates/*/tests/**/*.rs",
     "crates/*/src/**/tests.rs",
     "crates/*/src/**/tests/**/*.rs",
-    "tools/*/tests/**/*.rs"
+    "tools/*/tests/**"
   ],
   "impl_globs": [
     "crates/*/src/**/*.rs",
@@ -12,12 +12,29 @@
     "tools/rosetta-bridge/**/*.cpp",
     "tools/rosetta-bridge/**/*.hpp",
     "tools/rosetta-bridge/patches/**",
-    "data/batches.tsv",
-    "data/keyword_pool.txt"
+    "tools/rosetta-bridge/build.bat",
+    "data/*.txt",
+    "data/*.tsv"
   ],
   "ignore_globs": [
     "target/**",
-    "tools/rosetta-bridge/build/**"
+    "tools/rosetta-bridge/build/**",
+    "docs/**",
+    "README.md",
+    "CLAUDE.md",
+    "LICENSE",
+    "data/README.md",
+    "tools/rosetta-bridge/README.md",
+    ".claude/**",
+    "**/Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    "deny.toml",
+    ".github/**",
+    ".githooks/**",
+    ".gitignore",
+    ".gitattributes",
+    ".gitleaksignore"
   ],
   "test_command_regex": "(^|[;&|]\\s*)cargo\\s+(\\+\\S+\\s+)?test\\b",
   "language": "rust",

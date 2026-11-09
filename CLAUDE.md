@@ -34,7 +34,7 @@ Cargo workspace，**相依只能單向**：data → core → cards → ai → si
 - `emberstone-sim`：對戰模擬、牌組勝率矩陣、速度量測、繁體中文報告。
 - `emberstone-py`（之後建立）：PyO3 的 Gym 風格環境；訓練與 LLM 代理在 Python 端。
 - `emberstone-cardgen`：卡表產生器（`cargo run -p emberstone-cardgen --bin gen-cards`），只有它用 serde_json。
-- `tools/difftest`（Rust）＋ `tools/rosetta-bridge`（C++，Windows 上以 MSVC 編譯）：和 RosettaStone 的差分測試。`difftest batches` 產生 `data/batches.tsv`；`difftest run --batch A --games N --seed S` 跑隨機對局比對。橋接程式要先用 `tools/rosetta-bridge/build.bat` 編好（說明見該目錄 README）；`tests/bridge.rs` 需要它，主要 CI 不跑、改在 `difftest.yml`。`tools/` 的檔案已列入 `.claude/tdd.json`，新增其他類型檔案時要同步更新 globs。
+- `tools/difftest`（Rust）＋ `tools/rosetta-bridge`（C++，Windows 上以 MSVC 編譯）：和 RosettaStone 的差分測試。`difftest batches` 產生 `data/batches.tsv`；`difftest run --batch A --games N --seed S` 跑隨機對局比對。橋接程式要先用 `tools/rosetta-bridge/build.bat` 編好（說明見該目錄 README）；`tests/bridge.rs` 需要它，主要 CI 不跑、改在 `difftest.yml`。新類型檔案的分類見下方「編輯與測試路徑」。
 
 ### 核心設計約束
 - 實體存在 `Vec<Entity>`、以編號互相參照；手牌／牌庫／戰場是編號清單。整份狀態 `#[derive(Clone)]`——複製速度是搜尋 AI 的命脈，避免引入讓複製變慢的結構（`Rc`、大量小陣列配置等）。
@@ -53,13 +53,15 @@ Cargo workspace，**相依只能單向**：data → core → cards → ai → si
 
 ## 編輯與測試路徑（hook 強制）
 
-- `.rs` 一律透過 **RustRover MCP**（`mcp__rustrover__create_new_file`／`apply_patch`）編輯；Edit/Write 與 Bash 寫 `.rs` 會被擋。
+- 每個檔案都要在 `.claude/tdd.json` 分類（test／impl／ignore）。測試與實作檔（含 `.patch`、`build.bat`、`data/*.txt`）一律透過 **RustRover MCP**（`mcp__rustrover__create_new_file`／`apply_patch`）編輯；Edit/Write 只能改 ignore 的檔案（文件、設定）。
+- 沒被分類的檔案（新類型、新位置）在修改前會被 hook 擋下：先和使用者討論它屬於哪一類、更新 `tdd.json`，再改。
+- repo 內一律不用 Bash 寫檔（重導向、`sed -i`、`cp`／`mv`／`rm`、腳本寫檔都會被擋）；專案外（例如 `/tmp`）和 ignore 的路徑（例如 `target/`）不受限。`git restore`／`git checkout -- <檔案>` 允許，但會記進稽核紀錄。
+- 新增 RosettaStone patch 只要在 `tools/rosetta-bridge/patches/` 新增 `.patch` 檔（`build.bat` 依檔名順序自動套用）；修改同一段程式碼的修正要合併成一個 patch。
 - `cargo test` 一律透過 `mcp__rustrover__execute_terminal_command` 執行（Bash 跑會被擋）。不要加 `2>&1`（會少掉 Doc-tests）。
 - 這個工具偶爾掉 stderr 行或夾雜 NUL（RustRover 端問題），hook 會用 exit code 交叉檢查；結果判成 invalid 就重跑。
 - 跑測試時**不要用 `maxLinesCount`／`truncateMode` 截斷輸出**（用 `truncateMode: NONE`）：截掉 `test result:` 行會讓 hook 把綠燈判成 invalid。
 - `data/tw_all.json` 不在 git 裡；測試需要它，缺檔時照 `data/README.md` 下載固定版本。
 - `cargo build`／`clippy` 等不改檔的指令可用 Bash。`cargo fmt` 會改寫 `.rs` 而不經 hook 記錄，Stop 時會被列為未記錄變更，執行前先跟使用者確認。
-- Bash 指令裡同時出現「寫檔的腳本」和 `.rs` 路徑字樣時，hook 會保守地擋下（即使只是改 `.md`）；改文件用 Edit/Write 工具。
 
 ## Git 與 CI
 
