@@ -17,7 +17,6 @@ if "%VCVARS%"=="" (
 set "BRIDGE_DIR=%~dp0"
 set "SRC=%ROSETTA_ROOT%\RosettaStone"
 set "ROSETTA_COMMIT=1690208"
-set "PATCHES=0001-build-options.patch;0002-rng-call-sites.patch;0003-fix-adjacent-aura-use-after-free.patch;0004-coin-temp-mana.patch"
 
 rem vcvars may overwrite VCPKG_ROOT with the copy bundled in Visual Studio, so keep ours
 set "MY_VCPKG_ROOT=%VCPKG_ROOT%"
@@ -32,15 +31,19 @@ if not "%HEAD%"=="%ROSETTA_COMMIT%" (
     exit /b 1
 )
 
-rem Apply patches (skip the ones already applied)
-for %%p in (0001-build-options.patch 0002-rng-call-sites.patch 0003-fix-adjacent-aura-use-after-free.patch 0004-coin-temp-mana.patch) do (
+rem Apply every patches\*.patch in name order (skip the ones already applied).
+rem PATCHES collects the names for the bridge's version report.
+set "PATCHES="
+for /f "delims=" %%p in ('dir /b /on "%BRIDGE_DIR%patches\*.patch"') do (
     git apply --check -R --ignore-whitespace "%BRIDGE_DIR%patches\%%p" 2>nul && (
         echo %%p already applied
     ) || (
         git apply --ignore-whitespace "%BRIDGE_DIR%patches\%%p" || exit /b 1
         echo %%p applied
     )
+    call set "PATCHES=%%PATCHES%%;%%p"
 )
+if defined PATCHES set "PATCHES=%PATCHES:~1%"
 
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
   -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl ^

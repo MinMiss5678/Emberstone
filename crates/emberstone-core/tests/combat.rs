@@ -158,3 +158,40 @@ fn d9_freeze_thaws_after_skipped_turn() {
     end(&mut g);
     assert!(!attack_targets(&g, minion(0, yeti)).is_empty());
 }
+
+// D9a：在自己回合被凍結：還有攻擊次數（風怒只打一次）→ 本回合結束就解凍
+#[test]
+fn d9a_windfury_frozen_with_attack_left_thaws_this_turn() {
+    let mut g = start(&[], &[]);
+    let harpy = ready(&mut g, 0, "EX1_033"); // 風怒鷹身人 4/5 風怒
+    let elemental = ready(&mut g, 1, "CS2_033"); // 水元素 3/6 凍結
+    act(&mut g, attack(minion(0, harpy), minion(1, elemental)));
+    assert!(board_entity(&g, 0, harpy).frozen);
+    end(&mut g);
+    assert!(!board_entity(&g, 0, harpy).frozen);
+}
+
+// D9a：攻擊次數已用完才被凍結 → 到下一個自己的回合結束才解凍
+#[test]
+fn d9a_frozen_after_last_attack_stays_frozen() {
+    let mut g = start(&[], &[]);
+    let yeti = ready(&mut g, 0, "CS2_182");
+    let elemental = ready(&mut g, 1, "CS2_033");
+    act(&mut g, attack(minion(0, yeti), minion(1, elemental)));
+    end(&mut g);
+    assert!(board_entity(&g, 0, yeti).frozen);
+    end(&mut g);
+    assert!(attack_targets(&g, minion(0, yeti)).is_empty());
+    end(&mut g);
+    assert!(!board_entity(&g, 0, yeti).frozen);
+}
+
+// D9a：英雄在自己回合被凍結、還沒攻擊（攻擊力 0）→ 本回合結束就解凍
+#[test]
+fn d9a_hero_frozen_on_own_turn_thaws_this_turn() {
+    let mut g = start(&[], &[]);
+    let h = g.player(0).hero;
+    g.entity_mut(h).frozen = true;
+    end(&mut g);
+    assert!(!g.entity(h).frozen);
+}

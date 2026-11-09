@@ -1,0 +1,15 @@
+diff --git a/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp b/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
+--- a/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
++++ b/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
+@@ -2978,8 +2978,9 @@
+     // - TAUNT = 1
+     // --------------------------------------------------------
+     cardDef.ClearData();
+-    cardDef.power.AddTrigger(
+-        std::make_shared<Trigger>(Triggers::EnrageTrigger("OG_218e")));
++    // "While damaged": the bonus must go away when healed to full.
++    cardDef.power.AddAura(
++        std::make_shared<EnrageEffect>(AuraType::SELF, "OG_218e"));
+     cards.emplace("CORE_OG_218", cardDef);
+ 
+     // --------------------------------------- MINION - WARRIOR

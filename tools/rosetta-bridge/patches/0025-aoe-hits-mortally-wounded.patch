@@ -1,0 +1,64 @@
+diff --git a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DamageTask.cpp b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DamageTask.cpp
+--- a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DamageTask.cpp
++++ b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DamageTask.cpp
+@@ -8,6 +8,7 @@
+ #include <Rosetta/PlayMode/Tasks/SimpleTasks/DamageTask.hpp>
+ #include <Rosetta/PlayMode/Tasks/SimpleTasks/DestroyTask.hpp>
+ #include <Rosetta/PlayMode/Tasks/SimpleTasks/IncludeTask.hpp>
++#include <Rosetta/PlayMode/Zones/FieldZone.hpp>
+ 
+ #include <effolkronium/random.hpp>
+ 
+@@ -33,9 +34,51 @@ DamageTask::DamageTask(EntityType entityType, int damage, int randomDamage,
+ 
+ TaskStatus DamageTask::Impl(Player* player)
+ {
+-    const auto playables =
++    auto playables =
+         IncludeTask::GetEntities(m_entityType, player, m_source, m_target);
+ 
++    // Area damage also hits mortally wounded minions: they stay in play
++    // until the next death phase (e.g. the second of two deathrattles).
++    bool friendly = false, enemy = false, noSource = false;
++    switch (m_entityType)
++    {
++        case EntityType::ALL:
++        case EntityType::ALL_MINIONS:
++            friendly = enemy = true;
++            break;
++        case EntityType::ALL_MINIONS_NOSOURCE:
++            friendly = enemy = noSource = true;
++            break;
++        case EntityType::ENEMIES:
++        case EntityType::ENEMY_MINIONS:
++            enemy = true;
++            break;
++        case EntityType::FRIENDS:
++        case EntityType::MINIONS:
++            friendly = true;
++            break;
++        default:
++            break;
++    }
++    for (Player* side : { friendly ? player : nullptr,
++                          enemy ? player->opponent : nullptr })
++    {
++        if (!side)
++        {
++            continue;
++        }
++        FieldZone* field = side->GetFieldZone();
++        for (int i = 0; i < field->GetCount(); ++i)
++        {
++            const auto minion = dynamic_cast<Minion*>((*field)[i]);
++            if (minion && minion->isDestroyed &&
++                !(noSource && minion == m_source))
++            {
++                playables.emplace_back(minion);
++            }
++        }
++    }
++
+     for (auto& playable : playables)
+     {
+         int damage = m_damage;

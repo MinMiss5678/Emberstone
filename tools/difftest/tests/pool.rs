@@ -69,3 +69,17 @@ fn g1_committed_keyword_pool() {
     let allowed: Vec<Keyword> = KEYWORDS.to_vec();
     assert_eq!(allowed.len(), 8);
 }
+
+// 第 2 階段 G2：範例卡池：每張都是可收藏的卡，而且 emberstone-cards 有實作效果
+#[test]
+fn stage2_g2_committed_example_pool() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/stage2_pool.txt");
+    let text = std::fs::read_to_string(path).expect("讀不到 data/stage2_pool.txt");
+    let ids = parse_pool(&text);
+    assert!(ids.len() >= 25, "卡池太小：{}", ids.len());
+    for id in &ids {
+        let c = card_by_id(id).unwrap_or_else(|| panic!("卡表沒有 {id}"));
+        assert!(c.collectible, "{id} 不是可收藏的卡");
+        assert!(emberstone_cards::lookup(id).is_some(), "{id} 沒有實作效果");
+    }
+}

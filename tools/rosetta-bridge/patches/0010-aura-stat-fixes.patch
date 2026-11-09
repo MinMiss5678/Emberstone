@@ -1,0 +1,43 @@
+diff --git a/Includes/Rosetta/PlayMode/Enchants/Attrs/Atk.hpp b/Includes/Rosetta/PlayMode/Enchants/Attrs/Atk.hpp
+--- a/Includes/Rosetta/PlayMode/Enchants/Attrs/Atk.hpp
++++ b/Includes/Rosetta/PlayMode/Enchants/Attrs/Atk.hpp
+@@ -98,7 +98,9 @@
+         }
+ 
+         const auto minion = dynamic_cast<Minion*>(entity);
+-        return minion->GetAttack();
++        // Exclude aura bonus so enchantments do not bake it into the base.
++        return minion->GetAttack() -
++               (minion->auraEffects ? minion->auraEffects->GetAttack() : 0);
+     }
+ 
+     //! Sets the value of the attribute of the entity.
+diff --git a/Includes/Rosetta/PlayMode/Enchants/Attrs/Health.hpp b/Includes/Rosetta/PlayMode/Enchants/Attrs/Health.hpp
+--- a/Includes/Rosetta/PlayMode/Enchants/Attrs/Health.hpp
++++ b/Includes/Rosetta/PlayMode/Enchants/Attrs/Health.hpp
+@@ -73,7 +73,9 @@
+     {
+         SelfContainedIntAttr::RemoveAura(entity, effectOp, value);
+ 
+-        if (effectOp == EffectOperator::ADD)
++        // A dead minion must not be destroyed again (deathrattle twice).
++        if (effectOp == EffectOperator::ADD &&
++            dynamic_cast<Character*>(entity)->GetZoneType() == ZoneType::PLAY)
+         {
+             auto character = dynamic_cast<Character*>(entity);
+             character->SetDamage(character->GetDamage() - value);
+@@ -87,7 +89,13 @@
+     int GetValue(Entity* entity) override
+     {
+         const auto character = dynamic_cast<Character*>(entity);
+-        return character->GetBaseHealth();
++        // Exclude aura bonus so enchantments do not bake it into the base.
++        if (dynamic_cast<Minion*>(character) && character->auraEffects)
++        {
++            return character->GetBaseHealth() -
++                   character->auraEffects->GetHealth();
++        }
++        return character->GetBaseHealth();
+     }
+ 
+     //! Sets the value of the attribute of the entity.

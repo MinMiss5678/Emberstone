@@ -1,0 +1,42 @@
+diff --git a/Sources/Rosetta/PlayMode/Models/Minion.cpp b/Sources/Rosetta/PlayMode/Models/Minion.cpp
+--- a/Sources/Rosetta/PlayMode/Models/Minion.cpp
++++ b/Sources/Rosetta/PlayMode/Models/Minion.cpp
+@@ -259,6 +259,21 @@
+ void Minion::Reset()
+ {
+     Entity::Reset();
++
++    // A minion leaving play becomes a fresh card: drop silence and the
++    // one-turn effects that would otherwise be removed from it later.
++    for (const auto tag :
++         { GameTag::SILENCED, GameTag::DEATHRATTLE, GameTag::BATTLECRY,
++           GameTag::ENRAGED, GameTag::INSPIRE, GameTag::LIFESTEAL,
++           GameTag::RUSH, GameTag::REBORN, GameTag::IMMUNE,
++           GameTag::CANT_ATTACK, GameTag::SPELLPOWER })
++    {
++        m_gameTags.erase(tag);
++    }
++
++    EraseIf(game->oneTurnEffects, [this](const auto& effect) {
++        return effect.first == this;
++    });
+ 
+     if (ongoingEffect)
+     {
+diff --git a/Sources/Rosetta/PlayMode/Auras/EnrageEffect.cpp b/Sources/Rosetta/PlayMode/Auras/EnrageEffect.cpp
+--- a/Sources/Rosetta/PlayMode/Auras/EnrageEffect.cpp
++++ b/Sources/Rosetta/PlayMode/Auras/EnrageEffect.cpp
+@@ -42,6 +42,13 @@
+         {
+             return;
+         }
++
++        // Silence and leaving play already reset the attack.
++        if (minion->GetGameTag(GameTag::SILENCED) == 1 ||
++            minion->GetZoneType() != ZoneType::PLAY)
++        {
++            return;
++        }
+ 
+         if (m_type == AuraType::WEAPON)
+         {

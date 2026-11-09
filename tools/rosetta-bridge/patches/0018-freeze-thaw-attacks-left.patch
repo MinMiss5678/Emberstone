@@ -1,0 +1,15 @@
+diff --git a/Sources/Rosetta/PlayMode/Games/Game.cpp b/Sources/Rosetta/PlayMode/Games/Game.cpp
+--- a/Sources/Rosetta/PlayMode/Games/Game.cpp
++++ b/Sources/Rosetta/PlayMode/Games/Game.cpp
+@@ -544,8 +544,9 @@
+     // Field
+     for (const auto& minion : curPlayer->GetFieldZone()->GetMinions())
+     {
+-        if (minion->IsFrozen() && minion->GetNumAttacksThisTurn() == 0 &&
+-            !minion->IsExhausted())
++        // Thaw unless all attacks were used (e.g. Windfury with one attack
++        // left thaws this turn).
++        if (minion->IsFrozen() && !minion->IsExhausted())
+         {
+             minion->SetGameTag(GameTag::FROZEN, 0);
+         }

@@ -1,0 +1,15 @@
+diff --git a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/RandomTask.cpp b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/RandomTask.cpp
+--- a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/RandomTask.cpp
++++ b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/RandomTask.cpp
+@@ -26,9 +26,11 @@
+     const auto playables =
+         IncludeTask::GetEntities(m_entityType, player, m_source, m_target);
+ 
+     if (playables.empty())
+     {
++        // No candidate left: do not let the next task reuse the old pick.
++        stackPlayables.clear();
+         return TaskStatus::STOP;
+     }
+ 
+     if (static_cast<int>(playables.size()) < m_amount)

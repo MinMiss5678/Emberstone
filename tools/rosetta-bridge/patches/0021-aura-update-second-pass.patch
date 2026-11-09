@@ -1,0 +1,22 @@
+diff --git a/Sources/Rosetta/PlayMode/Games/Game.cpp b/Sources/Rosetta/PlayMode/Games/Game.cpp
+--- a/Sources/Rosetta/PlayMode/Games/Game.cpp
++++ b/Sources/Rosetta/PlayMode/Games/Game.cpp
+@@ -755,11 +755,18 @@
+ void Game::UpdateAura()
+ {
+     const int auraSize = static_cast<int>(auras.size());
+     for (int i = auraSize - 1; i >= 0; --i)
+     {
+         auras[i]->Update();
+     }
++
++    // Second pass: an aura removed above can change Health (a damaged minion
++    // may become undamaged), which "while damaged" effects must see.
++    for (int i = static_cast<int>(auras.size()) - 1; i >= 0; --i)
++    {
++        auras[i]->Update();
++    }
+ 
+     std::erase_if(m_ownedAuras, [this](const auto& aura) {
+         return !std::ranges::contains(auras, aura.get());
+     });
