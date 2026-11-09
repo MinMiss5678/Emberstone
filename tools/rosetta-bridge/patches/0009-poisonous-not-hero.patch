@@ -1,0 +1,13 @@
+diff --git a/Sources/Rosetta/PlayMode/Actions/Attack.cpp b/Sources/Rosetta/PlayMode/Actions/Attack.cpp
+--- a/Sources/Rosetta/PlayMode/Actions/Attack.cpp
++++ b/Sources/Rosetta/PlayMode/Actions/Attack.cpp
+@@ -117,7 +117,8 @@
+         // Destroy source if defender is poisonous
+         const bool hasTargetMinionPoisonous =
+             (targetMinion && targetMinion->HasPoisonous());
+-        if (isSourceDamaged && hasTargetMinionPoisonous && !source->isDestroyed)
++        if (isSourceDamaged && hasTargetMinionPoisonous && !hero &&
++            !source->isDestroyed)
+         {
+             source->Destroy();
+         }

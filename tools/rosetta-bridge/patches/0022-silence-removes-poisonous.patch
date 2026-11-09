@@ -1,0 +1,11 @@
+diff --git a/Sources/Rosetta/PlayMode/Models/Minion.cpp b/Sources/Rosetta/PlayMode/Models/Minion.cpp
+--- a/Sources/Rosetta/PlayMode/Models/Minion.cpp
++++ b/Sources/Rosetta/PlayMode/Models/Minion.cpp
+@@ -160,6 +160,7 @@
+     SetGameTag(BATTLECRY, 0);
+     SetGameTag(INSPIRE, 0);
+     SetGameTag(LIFESTEAL, 0);
++    SetGameTag(POISONOUS, 0);
+     SetGameTag(CANT_BE_TARGETED_BY_HERO_POWERS, 0);
+     SetGameTag(CANT_BE_TARGETED_BY_SPELLS, 0);
+     SetGameTag(IMMUNE, 0);

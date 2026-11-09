@@ -1,0 +1,22 @@
+A hero's weapon only counts on its owner's turn (user-approved case F5): on the
+opponent's turn the hero's attack does not include the weapon, so a hero that
+is attacked does not hit back with its weapon. RosettaStone 1690208 always adds
+the weapon's attack.
+
+diff --git a/Sources/Rosetta/PlayMode/Models/Hero.cpp b/Sources/Rosetta/PlayMode/Models/Hero.cpp
+--- a/Sources/Rosetta/PlayMode/Models/Hero.cpp
++++ b/Sources/Rosetta/PlayMode/Models/Hero.cpp
+@@ -25,9 +25,11 @@
+ }
+ 
+ int Hero::GetAttack() const
+ {
+-    return HasWeapon() ? Character::GetAttack() + weapon->GetAttack()
+-                       : Character::GetAttack();
++    // Emberstone: the weapon only counts on its owner's turn (case F5)
++    return HasWeapon() && player == game->GetCurrentPlayer()
++               ? Character::GetAttack() + weapon->GetAttack()
++               : Character::GetAttack();
+ }
+ 
+ int Hero::GetArmor() const

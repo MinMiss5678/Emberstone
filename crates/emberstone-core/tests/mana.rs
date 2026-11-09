@@ -35,33 +35,7 @@ fn b1_turn_start_gains_crystal_and_draws() {
     assert_eq!(mana(&g, 0), (10, 10));
 }
 
-// B2：幸運幣讓本回合可用法力 +1；下回合照常補滿到上限
-#[test]
-fn b2_coin_adds_one_mana_this_turn() {
-    let mut g = start(&[], &[]);
-    end(&mut g);
-    let coin = hand_index(&g, 1, COIN);
-    act(&mut g, play(coin, None));
-    assert_eq!(mana(&g, 1), (2, 1));
-    assert!(!hand_ids(&g, 1).contains(&COIN));
-    end(&mut g);
-    end(&mut g);
-    assert_eq!(mana(&g, 1), (2, 2));
-}
-
-// B2a：10/10 時使用幸運幣 → 11/10
-#[test]
-fn b2a_coin_can_exceed_ten() {
-    let mut g = start(&[], &[]);
-    while g.turn() < 20 {
-        end(&mut g);
-    }
-    assert_eq!(g.current_player(), 1);
-    assert_eq!(mana(&g, 1), (10, 10));
-    let coin = hand_index(&g, 1, COIN);
-    act(&mut g, play(coin, None));
-    assert_eq!(mana(&g, 1), (11, 10));
-}
+// B2、B2a（幸運幣）：效果在第 2 階段搬到 emberstone-cards，測試在 crates/emberstone-cards/tests/spells.rs
 
 // B3：超載 1 → 下個回合鎖 1 顆，再下個回合解除
 #[test]
@@ -131,4 +105,15 @@ fn b6_end_turn_switches_and_resets_attacks() {
     end(&mut g);
     assert_eq!(board_entity(&g, 0, i).attacks_this_turn, 0);
     assert!(attack_targets(&g, minion(0, i)).contains(&hero(1)));
+}
+
+// B3a：鎖住的水晶比上限多 → 可用法力是負的，但 0 費的牌照樣能打出
+#[test]
+fn b3a_zero_cost_playable_with_negative_mana() {
+    let mut g = start(&["CS2_231"], &[]); // 小精靈 0 費
+    g.player_mut(0).mana = -1;
+    let wisp = hand_index(&g, 0, "CS2_231");
+    act(&mut g, play(wisp, Some(0)));
+    assert_eq!(board_ids(&g, 0), vec!["CS2_231"]);
+    assert_eq!(g.player(0).mana, -1);
 }

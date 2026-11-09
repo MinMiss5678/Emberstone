@@ -1,0 +1,16 @@
+diff --git a/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp b/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
+--- a/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
++++ b/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
+@@ -138,6 +138,12 @@
+ 
+     // Remove old entity
+     RemoveAura(oldEntity);
++
++    // The transformed minion's own trigger leaves with it.
++    if (oldEntity->activatedTrigger)
++    {
++        oldEntity->activatedTrigger->Remove();
++    }
+ 
+     for (const auto& aura : auras)
+     {

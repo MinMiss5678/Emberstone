@@ -1,0 +1,31 @@
+Make Totemic Call (HERO_02bp) follow the current Hearthstone rules:
+- Patch 29.0 (2024-03): the basic totems are Searing, Stoneclaw, Wrath of Air
+  and Healing (Wrath of Air CS2_052 replaced Strength Totem CS2_058).
+- Patch 27.0 (2023-07): it can be used even if all four basic totems are on
+  the board; then it summons one of the four at random. Totems not on the board
+  are still preferred (user-approved case A10).
+
+diff --git a/Sources/Rosetta/PlayMode/CardSets/LegacyCardsGen.cpp b/Sources/Rosetta/PlayMode/CardSets/LegacyCardsGen.cpp
+--- a/Sources/Rosetta/PlayMode/CardSets/LegacyCardsGen.cpp
++++ b/Sources/Rosetta/PlayMode/CardSets/LegacyCardsGen.cpp
+@@ -187,6 +187,9 @@
+             if (totemCards.empty())
+             {
+-                return 0;
++                for (const auto& id : playable->card->entourages)
++                {
++                    totemCards.emplace_back(Cards::FindCardByID(id));
++                }
+             }
+ 
+             const auto idx = Random::get<std::size_t>(0, totemCards.size() - 1);
+@@ -198,7 +201,6 @@
+         }));
+     cardDef.property.playReqs =
+-        PlayReqs{ { PlayReq::REQ_NUM_MINION_SLOTS, 1 },
+-                  { PlayReq::REQ_ENTIRE_ENTOURAGE_NOT_IN_PLAY, 0 } };
++        PlayReqs{ { PlayReq::REQ_NUM_MINION_SLOTS, 1 } };
+     cardDef.property.entourages =
+-        Entourages{ "CS2_050", "CS2_051", "CS2_058", "NEW1_009" };
++        Entourages{ "CS2_050", "CS2_051", "CS2_052", "NEW1_009" };
+     cards.emplace("HERO_02bp", cardDef);

@@ -71,6 +71,7 @@ pub fn new_game(setup: &GameSetup) -> Result<Game, String> {
         players: [player_config(&setup.p1)?, player_config(&setup.p2)?],
         shuffle: false,
         rng,
+        effects: Some(emberstone_cards::lookup),
     })
     .map_err(|e| format!("開局失敗：{e:?}"))
 }
@@ -192,7 +193,7 @@ fn player_state(g: &Game, p: usize) -> PlayerState {
             armor: hero.armor,
             attack: g.hero_attack(p),
             weapon,
-            power_used: false,
+            power_used: me.power_used,
         },
         mana: Mana {
             available: me.mana,
@@ -207,7 +208,11 @@ fn player_state(g: &Game, p: usize) -> PlayerState {
             .collect(),
         board,
         deck_count: me.deck.len() as i32,
-        secrets: Vec::new(),
+        secrets: me
+            .secrets
+            .iter()
+            .map(|&s| g.entity(s).card.id.to_string())
+            .collect(),
         fatigue: me.fatigue,
     }
 }

@@ -369,15 +369,21 @@ json Options()
     }
 
     HeroPower& power = p->GetHeroPower();
-    if (power.IsPlayableByPlayer() && power.IsPlayableByCardReq())
+    // IsPlayableByPlayer 沒有檢查本回合已用過（HeroPowerTask 執行時才擋下），要另外判斷
+    if (!power.IsExhausted() && power.IsPlayableByPlayer() && power.IsPlayableByCardReq())
     {
-        if (power.IsValidPlayTarget(nullptr))
+        // 穩固射擊不用選目標（HeroPowerTask 會自己指定敵方英雄），和 Emberstone 一樣列成沒有目標
+        if (power.card->id == "HERO_05bp")
+        {
+            out.push_back({ { "type", "power" }, { "target", nullptr } });
+        }
+        else if (power.IsValidPlayTarget(nullptr))
         {
             out.push_back({ { "type", "power" }, { "target", nullptr } });
         }
         for (Character* t : characters)
         {
-            if (power.IsValidPlayTarget(t))
+            if (power.card->id != "HERO_05bp" && power.IsValidPlayTarget(t))
             {
                 out.push_back({ { "type", "power" }, { "target", TargetJson(t) } });
             }

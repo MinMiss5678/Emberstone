@@ -1,0 +1,13 @@
+diff --git a/Sources/Rosetta/PlayMode/Models/Playable.cpp b/Sources/Rosetta/PlayMode/Models/Playable.cpp
+--- a/Sources/Rosetta/PlayMode/Models/Playable.cpp
++++ b/Sources/Rosetta/PlayMode/Models/Playable.cpp
+@@ -250,7 +250,8 @@
+ bool Playable::IsPlayableByPlayer()
+ {
+     // Check if player has enough mana to play card
+-    if (player->GetRemainingMana() < GetCost())
++    // (Overload can make it negative; 0-cost cards are always playable)
++    if (GetCost() > 0 && player->GetRemainingMana() < GetCost())
+     {
+         return false;
+     }

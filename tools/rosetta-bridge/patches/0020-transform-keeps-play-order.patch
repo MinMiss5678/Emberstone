@@ -1,0 +1,13 @@
+diff --git a/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp b/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
+--- a/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
++++ b/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
+@@ -153,7 +153,8 @@
+     oldEntity->player->GetSetasideZone()->Add(oldEntity);
+ 
+     // Add new entity
+-    newEntity->orderOfPlay = newEntity->game->GetNextOOP();
++    // A transformed minion keeps its place in the order of play.
++    newEntity->orderOfPlay = oldEntity->orderOfPlay;
+ 
+     m_entities[pos] = newEntity;
+     newEntity->SetZonePosition(pos);

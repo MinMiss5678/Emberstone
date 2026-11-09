@@ -1,0 +1,34 @@
+Deathrattle summon positions (verified against the user's Power.log, case D3):
+minions that die together are removed one by one in play order and remember
+their board position at removal. When a deathrattle summons a minion at a
+position, the remembered positions of the other dead minions at or right of
+that position move one to the right. RosettaStone 1690208 does not do this
+last step, so e.g. Harvest Golem (left, played later) and Haunted Creeper
+(right, played earlier) dying together ended up as Golem, Spider, Spider
+instead of Spider, Spider, Golem.
+
+diff --git a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/SummonTask.cpp b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/SummonTask.cpp
+--- a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/SummonTask.cpp
++++ b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/SummonTask.cpp
+@@ -232,7 +232,21 @@
+         else
+         {
+             Generic::Summon(summonEntity, summonPos, m_source);
+         }
++
++        if (m_side == SummonSide::DEATHRATTLE)
++        {
++            // Emberstone: a deathrattle summon pushes the remembered board
++            // positions of the other minions that died at or right of it.
++            for (Playable* dead : player->GetGraveyardZone()->GetAll())
++            {
++                auto* minion = dynamic_cast<Minion*>(dead);
++                if (minion != nullptr && minion->GetLastBoardPos() >= summonPos)
++                {
++                    minion->SetLastBoardPos(minion->GetLastBoardPos() + 1);
++                }
++            }
++        }
+     }
+ 
+     return TaskStatus::COMPLETE;

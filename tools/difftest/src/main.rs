@@ -104,9 +104,10 @@ fn rosetta_class(class: CardClass) -> Option<&'static str> {
     })
 }
 
-/// 指定批次中可放進牌組的卡（我們的卡號）。
+/// 指定批次中可放進牌組的卡（我們的卡號）；fill 是不夠 30 張時補滿用的卡。
 struct Pool {
     cards: Vec<&'static emberstone_data::Card>,
+    fill: Vec<&'static emberstone_data::Card>,
 }
 
 impl Pool {
@@ -122,7 +123,10 @@ impl Pool {
                 )
             })
             .collect();
-        Self { cards }
+        Self {
+            cards,
+            fill: Vec::new(),
+        }
     }
 
     /// 卡號清單（卡池檔）組成的卡池。
@@ -131,12 +135,21 @@ impl Pool {
             .iter()
             .map(|id| card_by_id(id).ok_or_else(|| format!("卡表沒有 {id}")))
             .collect::<Result<_, _>>()?;
-        Ok(Self { cards })
+        Ok(Self {
+            cards,
+            fill: Vec::new(),
+        })
+    }
+
+    /// 主要卡池放滿後，不夠 30 張的部分用 fill 補。
+    fn with_fill(mut self, fill: Pool) -> Self {
+        self.fill = fill.cards;
+        self
     }
 
     fn classes(&self) -> Vec<CardClass> {
         let mut v: Vec<CardClass> = Vec::new();
-        for c in &self.cards {
+        for c in self.cards.iter().chain(&self.fill) {
             if let Some(class) = c.class.filter(|k| rosetta_class(*k).is_some())
                 && !v.contains(&class)
             {
@@ -149,19 +162,30 @@ impl Pool {
 
     /// 隨機組 30 張（傳說 1 張、其他最多 2 張），照抽牌順序。
     fn deck(&self, class: CardClass, rng: &mut SplitMix64) -> Result<Vec<&'static str>, String> {
-        let mut slots: Vec<&'static str> = Vec::new();
-        for c in &self.cards {
-            if c.class == Some(class) || c.class == Some(CardClass::Neutral) {
-                let copies = if c.rarity == Some(Rarity::Legendary) {
-                    1
-                } else {
-                    2
-                };
-                slots.extend(std::iter::repeat_n(c.id, copies));
+        let shuffled = |cards: &[&'static emberstone_data::Card], rng: &mut SplitMix64| {
+            let mut slots: Vec<&'static str> = Vec::new();
+            for c in cards {
+                if c.class == Some(class) || c.class == Some(CardClass::Neutral) {
+                    let copies = if c.rarity == Some(Rarity::Legendary) {
+                        1
+                    } else {
+                        2
+                    };
+                    slots.extend(std::iter::repeat_n(c.id, copies));
+                }
             }
-        }
-        for i in (1..slots.len()).rev() {
-            slots.swap(i, rng.below(i + 1));
+            for i in (1..slots.len()).rev() {
+                slots.swap(i, rng.below(i + 1));
+            }
+            slots
+        };
+        let mut slots = shuffled(&self.cards, rng);
+        if slots.len() < 30 && !self.fill.is_empty() {
+            slots.extend(shuffled(&self.fill, rng));
+            // 重新洗勻，主要卡池的卡不會都集中在牌組前面
+            for i in (1..30.min(slots.len())).rev() {
+                slots.swap(i, rng.below(i + 1));
+            }
         }
         if slots.len() < 30 {
             return Err(format!("{class:?} 可用的卡不足 30 張"));
@@ -420,21 +444,27 @@ fn cmd_run(args: &[String]) -> Result<bool, String> {
         .parse()
         .map_err(|e| format!("--seed：{e}"))?;
     let rows = parse_tsv(&read(&root().join("data/batches.tsv"))?)?;
+    let pool_file = |name: &str| -> Result<Pool, String> {
+        Pool::from_ids(&parse_pool(&read(&root().join(format!("data/{name}")))?))
+    };
     let pool = match (
         arg(args, "--pool").as_deref(),
         arg(args, "--batch").as_deref(),
     ) {
-        (Some("keywords"), None) => {
-            Pool::from_ids(&parse_pool(&read(&root().join("data/keyword_pool.txt"))?))?
+        (Some("keywords"), None) => pool_file("keyword_pool.txt")?,
+        (Some("stage2"), None) => {
+            pool_file("stage2_pool.txt")?.with_fill(pool_file("keyword_pool.txt")?)
         }
         (None, Some("A")) => Pool::new(&rows, Batch::A),
         (None, Some("B")) => Pool::new(&rows, Batch::B),
         (p, b) => {
             return Err(format!(
-                "要指定 --batch A|B 或 --pool keywords 其中一個（收到 {p:?}、{b:?}）"
+                "要指定 --batch A|B 或 --pool keywords|stage2 其中一個（收到 {p:?}、{b:?}）"
             ));
         }
     };
+    // 第 2 階段起可以使用英雄技能
+    let powers = args.iter().any(|a| a == "--powers");
     let mut bridge = Bridge::spawn_default()?;
 
     let (mut consistent, mut different) = (0, 0);
@@ -445,7 +475,7 @@ fn cmd_run(args: &[String]) -> Result<bool, String> {
         }
         let game_seed = seed.wrapping_mul(1_000_003).wrapping_add(g as u64);
         let outcome = if emberstone_engine {
-            play_emberstone(&mut bridge, &pool, game_seed)?
+            play_emberstone(&mut bridge, &pool, game_seed, powers)?
         } else {
             play_game(&mut bridge, &pool, &rows, game_seed)?
         };
@@ -481,11 +511,16 @@ fn sorted_actions(v: &[Action]) -> Vec<String> {
     s
 }
 
-/// 在 RosettaStone 記錄一局（不使用英雄技能），再讓 Emberstone 用同樣的行動與亂數重播，
+/// 在 RosettaStone 記錄一局（powers 為 false 時不使用英雄技能），再讓 Emberstone 用同樣的行動與亂數重播，
 /// 逐步比對合法行動與快照。
-fn play_emberstone(bridge: &mut Bridge, pool: &Pool, seed: u64) -> Result<Outcome, String> {
+fn play_emberstone(
+    bridge: &mut Bridge,
+    pool: &Pool,
+    seed: u64,
+    powers: bool,
+) -> Result<Outcome, String> {
     let plan = plan(pool, &HashMap::new(), seed)?;
-    let rec = match record(bridge, &plan, true)? {
+    let rec = match record(bridge, &plan, !powers)? {
         Ok(r) => r,
         Err(e) => return Ok(Outcome::Error(e)),
     };
@@ -502,16 +537,26 @@ fn play_emberstone(bridge: &mut Bridge, pool: &Pool, seed: u64) -> Result<Outcom
     };
     let compare = |step: usize, ours: Snapshot| -> Option<Outcome> {
         let theirs = rec.snapshots.get(step)?;
-        first_difference(std::slice::from_ref(theirs), &[ours])
-            .map(|d| Outcome::Different(format!("第 {step} 步不同：{}", d.fields.join("、"))))
+        let d = first_difference(std::slice::from_ref(theirs), std::slice::from_ref(&ours))?;
+        detail(&rec, step, Some((theirs, &ours)));
+        Some(Outcome::Different(format!(
+            "第 {step} 步不同：{}",
+            d.fields.join("、")
+        )))
     };
     if let Some(d) = compare(0, emberstone::snapshot(&game)) {
         return Ok(d);
     }
     for (step, a) in rec.actions.iter().enumerate() {
         let theirs = sorted_actions(&rec.options[step]);
-        let mine = sorted_actions(&emberstone::options(&game));
+        let mut mine = emberstone::options(&game);
+        if !powers {
+            // 不使用英雄技能時，兩邊都不列
+            mine.retain(|a| !matches!(a, Action::Power { .. }));
+        }
+        let mine = sorted_actions(&mine);
         if theirs != mine {
+            detail(&rec, step, None);
             let only = |x: &[String], y: &[String]| -> Vec<String> {
                 x.iter().filter(|s| !y.contains(s)).cloned().collect()
             };
@@ -522,6 +567,7 @@ fn play_emberstone(bridge: &mut Bridge, pool: &Pool, seed: u64) -> Result<Outcom
             )));
         }
         if let Err(e) = emberstone::act(&mut game, a) {
+            detail(&rec, step, None);
             return Ok(Outcome::Different(format!(
                 "第 {step} 步 Emberstone 執行失敗：{e}（行動 {a:?}）"
             )));
@@ -531,6 +577,35 @@ fn play_emberstone(bridge: &mut Bridge, pool: &Pool, seed: u64) -> Result<Outcom
         }
     }
     Ok(Outcome::Consistent)
+}
+
+/// 除錯用：設定環境變數 EMBERSTONE_DIFF_DETAIL 時，把不一致前的行動與雙方快照寫到 stderr。
+fn detail(rec: &Recorded, step: usize, snapshots: Option<(&Snapshot, &Snapshot)>) {
+    if std::env::var_os("EMBERSTONE_DIFF_DETAIL").is_none() {
+        return;
+    }
+    let from = step.saturating_sub(6);
+    for (i, a) in rec.actions.iter().enumerate().take(step).skip(from) {
+        eprintln!("行動 {i}：{a:?}");
+    }
+    for i in step.saturating_sub(2)..=step {
+        if let Some(s) = rec.snapshots.get(i) {
+            eprintln!(
+                "RosettaStone 第 {i} 步：{}",
+                serde_json::to_string(s).unwrap_or_default()
+            );
+        }
+    }
+    if let Some((theirs, ours)) = snapshots {
+        eprintln!(
+            "RosettaStone：{}",
+            serde_json::to_string(theirs).unwrap_or_default()
+        );
+        eprintln!(
+            "Emberstone  ：{}",
+            serde_json::to_string(ours).unwrap_or_default()
+        );
+    }
 }
 
 fn main() -> ExitCode {

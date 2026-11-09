@@ -108,3 +108,34 @@ fn g2_unknown_class_is_error() {
     s.p1.class = "DEATHKNIGHT".into();
     assert!(emberstone::new_game(&s).is_err());
 }
+
+// 第 2 階段 G：快照照實回報秘密區與「英雄技能已使用」
+#[test]
+fn stage2_snapshot_secrets_and_power_used() {
+    let mut s = setup();
+    s.p1.deck[0] = "CORE_EX1_289".to_string(); // 寒冰護體（3 費）
+    let mut g = emberstone::new_game(&s).expect("開局失敗");
+    for _ in 0..4 {
+        emberstone::act(&mut g, &Action::End).expect("結束回合失敗");
+    }
+    // 第 5 回合，先手 3 顆水晶
+    let secret = Action::Play {
+        hand: 0,
+        pos: None,
+        target: None,
+        choose_one: 0,
+    };
+    emberstone::act(&mut g, &secret).expect("打出秘密失敗");
+    let snap = emberstone::snapshot(&g);
+    assert_eq!(snap.players[0].secrets, vec!["CORE_EX1_289"]);
+    assert!(!snap.players[0].hero.power_used);
+    emberstone::act(&mut g, &Action::End).expect("結束回合失敗");
+    emberstone::act(&mut g, &Action::End).expect("結束回合失敗");
+    let fireblast = Action::Power {
+        target: Some(Target::Hero { player: 2 }),
+    };
+    emberstone::act(&mut g, &fireblast).expect("火焰衝擊失敗");
+    let snap = emberstone::snapshot(&g);
+    assert!(snap.players[0].hero.power_used);
+    assert_eq!(snap.players[1].hero.health, 29);
+}

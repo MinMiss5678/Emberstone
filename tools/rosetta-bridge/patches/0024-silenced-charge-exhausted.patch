@@ -1,0 +1,30 @@
+diff --git a/Sources/Rosetta/PlayMode/Actions/Generic.cpp b/Sources/Rosetta/PlayMode/Actions/Generic.cpp
+--- a/Sources/Rosetta/PlayMode/Actions/Generic.cpp
++++ b/Sources/Rosetta/PlayMode/Actions/Generic.cpp
+@@ -350,7 +350,9 @@
+             }
+             else
+             {
+-                minion->SetExhausted(false);
++                // Charge lets it attack anyway (Playable::IsExhausted); losing
++                // Charge this turn (Silence) must leave it exhausted.
++                minion->SetExhausted(true);
+             }
+         }
+         else if (minion)
+diff --git a/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp b/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
+--- a/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
++++ b/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
+@@ -100,6 +100,12 @@
+                 minion->SetExhausted(true);
+             }
+         }
++        else
++        {
++            // Charge lets it attack anyway (Playable::IsExhausted); losing
++            // Charge this turn (Silence) must leave it exhausted.
++            minion->SetExhausted(true);
++        }
+     }
+ 
+     character->orderOfPlay = character->game->GetNextOOP();

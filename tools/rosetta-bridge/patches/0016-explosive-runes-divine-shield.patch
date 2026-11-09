@@ -1,0 +1,27 @@
+diff --git a/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp b/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
+--- a/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
++++ b/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
+@@ -953,16 +953,15 @@
+                     Generic::TakeDamageToCharacter(realSource, realTarget, 6,
+                                                    true);
+ 
+-                    if (realTarget->isDestroyed)
++                    // A Divine Shield absorbs damage equal to the minion's
++                    // health; the rest still hits the enemy hero.
++                    const int remainDamage = 6 - targetHealth;
++                    if (remainDamage > 0)
+                     {
+-                        const int remainDamage = 6 - targetHealth;
+-                        if (remainDamage > 0)
+-                        {
+-                            Generic::TakeDamageToCharacter(
+-                                realSource, player->opponent->GetHero(),
+-                                remainDamage, true);
+-                        }
++                        Generic::TakeDamageToCharacter(
++                            realSource, player->opponent->GetHero(),
++                            remainDamage, true);
+                     }
+                 }) }))
+     };
+     cards.emplace("CORE_LOOT_101", cardDef);
