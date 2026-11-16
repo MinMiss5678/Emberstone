@@ -1,0 +1,14 @@
+diff --git a/Sources/Rosetta/PlayMode/CardSets/AlteracValleyCardsGen.cpp b/Sources/Rosetta/PlayMode/CardSets/AlteracValleyCardsGen.cpp
+--- a/Sources/Rosetta/PlayMode/CardSets/AlteracValleyCardsGen.cpp
++++ b/Sources/Rosetta/PlayMode/CardSets/AlteracValleyCardsGen.cpp
+@@ -604,8 +604,9 @@ void AlteracValleyCardsGen::AddDruidNonCollect(
+     // - REQ_TARGET_TO_PLAY = 0
+     // --------------------------------------------------------
+     cardDef.ClearData();
++    // A minion's Choose One option: not affected by Spell Damage.
+     cardDef.power.AddPowerTask(
+-        std::make_shared<DamageTask>(EntityType::TARGET, 4, true));
++        std::make_shared<DamageTask>(EntityType::TARGET, 4));
+     cardDef.property.playReqs = PlayReqs{ { PlayReq::REQ_TARGET_TO_PLAY, 0 } };
+     cards.emplace("ONY_018t2", cardDef);
+ 

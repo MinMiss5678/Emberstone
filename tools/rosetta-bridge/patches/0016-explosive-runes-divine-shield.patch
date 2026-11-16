@@ -1,14 +1,22 @@
 diff --git a/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp b/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
 --- a/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
 +++ b/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
-@@ -953,16 +953,15 @@
-                     Generic::TakeDamageToCharacter(realSource, realTarget, 6,
-                                                    true);
+@@ -950,18 +950,19 @@ void CoreCardsGen::AddMage(std::map<std::string, CardDef>& cards)
+                     const auto realTarget = dynamic_cast<Character*>(target);
  
+                     const int targetHealth = realTarget->GetHealth();
+-                    Generic::TakeDamageToCharacter(realSource, realTarget, 6,
+-                                                   true);
+-
 -                    if (realTarget->isDestroyed)
++                    // 6 plus Spell Damage; the excess comes from the total.
++                    const int amount = 6 + player->GetCurrentSpellPower();
++                    Generic::TakeDamageToCharacter(realSource, realTarget,
++                                                   amount, false);
++
 +                    // A Divine Shield absorbs damage equal to the minion's
 +                    // health; the rest still hits the enemy hero.
-+                    const int remainDamage = 6 - targetHealth;
++                    const int remainDamage = amount - targetHealth;
 +                    if (remainDamage > 0)
                      {
 -                        const int remainDamage = 6 - targetHealth;
@@ -20,8 +28,7 @@ diff --git a/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp b/Sources/Rosett
 -                        }
 +                        Generic::TakeDamageToCharacter(
 +                            realSource, player->opponent->GetHero(),
-+                            remainDamage, true);
++                            remainDamage, false);
                      }
                  }) }))
      };
-     cards.emplace("CORE_LOOT_101", cardDef);

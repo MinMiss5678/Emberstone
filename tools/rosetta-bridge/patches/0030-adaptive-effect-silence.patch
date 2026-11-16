@@ -1,0 +1,37 @@
+diff --git a/Sources/Rosetta/PlayMode/Auras/AdaptiveEffect.cpp b/Sources/Rosetta/PlayMode/Auras/AdaptiveEffect.cpp
+--- a/Sources/Rosetta/PlayMode/Auras/AdaptiveEffect.cpp
++++ b/Sources/Rosetta/PlayMode/Auras/AdaptiveEffect.cpp
+@@ -79,6 +79,16 @@ void AdaptiveEffect::Update()
+         {
+             value = m_valueFunc(m_owner);
+ 
++            // A minion that left play and came back has its tag reset (no
++            // native value): start from the card value, not from 0.
++            if (!m_owner->GetGameTags().contains(m_tag))
++            {
++                const auto& tags = m_owner->card->gameTags;
++                const auto it = tags.find(m_tag);
++                m_owner->SetNativeGameTag(m_tag,
++                                          it != tags.end() ? it->second : 0);
++            }
++
+             Effect(m_tag, m_operator, m_lastValue).RemoveFrom(m_owner);
+             Effect(m_tag, m_operator, value).ApplyTo(m_owner);
+         }
+@@ -103,6 +113,16 @@ void AdaptiveEffect::Update()
+ 
+ void AdaptiveEffect::Remove()
+ {
++    // Take the applied value back now: Silence resets the stats right after,
++    // so removing it later would subtract it from the reset stats. A minion
++    // leaving play has already dropped the tag (reset), so skip it then.
++    if (m_turnOn && !m_isSwitching && m_lastValue != 0 &&
++        m_owner->GetGameTags().contains(m_tag))
++    {
++        Effect(m_tag, m_operator, m_lastValue).RemoveFrom(m_owner);
++    }
++    m_lastValue = 0;
++
+     m_owner->ongoingEffect = nullptr;
+     m_turnOn = false;
+ }

@@ -186,6 +186,43 @@ fn d9a_frozen_after_last_attack_stays_frozen() {
     assert!(!board_entity(&g, 0, yeti).frozen);
 }
 
+// D9b：剛上場的手下在自己的回合被凍結 → 到下一個自己的回合結束才解凍
+#[test]
+fn d9b_summoning_sick_frozen_stays_frozen() {
+    let mut g = start(&[], &[]);
+    let e = g.summon(0, "CS2_182", 0).expect("放不上戰場");
+    g.entity_mut(e).frozen = true;
+    end(&mut g);
+    assert!(g.entity(e).frozen);
+    end(&mut g);
+    end(&mut g);
+    assert!(!g.entity(e).frozen);
+}
+
+// D9a／D9b（第 3a 階段 H8）：剛上場的衝刺手下、上場時對手有手下（本回合能攻擊），還沒攻擊就被凍結 → 本回合結束就解凍
+#[test]
+fn d9b_rush_minion_frozen_on_own_turn_thaws_this_turn() {
+    let mut g = start(&[], &[]);
+    g.summon(1, "CS2_182", 0).expect("放不上戰場");
+    let e = g.summon(0, "CS3_038", 0).expect("放不上戰場"); // 紅鰓刃顎魚人（衝刺）
+    g.entity_mut(e).frozen = true;
+    end(&mut g);
+    assert!(!g.entity(e).frozen);
+}
+
+// 第 3a 階段 H8：上場時對手沒有手下的衝刺手下（本回合不能攻擊）被凍結 → 同 D9b，到下一個自己的回合結束才解凍（實測 R11）
+#[test]
+fn d9b_rush_minion_without_targets_stays_frozen() {
+    let mut g = start(&[], &[]);
+    let e = g.summon(0, "CS3_038", 0).expect("放不上戰場");
+    g.entity_mut(e).frozen = true;
+    end(&mut g);
+    assert!(g.entity(e).frozen);
+    end(&mut g);
+    end(&mut g);
+    assert!(!g.entity(e).frozen);
+}
+
 // D9a：英雄在自己回合被凍結、還沒攻擊（攻擊力 0）→ 本回合結束就解凍
 #[test]
 fn d9a_hero_frozen_on_own_turn_thaws_this_turn() {

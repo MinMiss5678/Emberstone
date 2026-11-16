@@ -10,6 +10,8 @@ pub(crate) fn lookup(id: &str) -> Option<&'static CardDef> {
         "CORE_EX1_611" => &FREEZING_TRAP,
         "CORE_EX1_287" => &COUNTERSPELL,
         "CORE_LOOT_101" => &EXPLOSIVE_RUNES,
+        "CORE_BAR_812" => &OASIS_ALLY,
+        "CORE_ULD_152" => &PRESSURE_PLATE,
         _ => return None,
     })
 }
@@ -52,6 +54,22 @@ static FREEZING_TRAP: CardDef = secret(
 /// 法術反制：秘密，當對手施放法術時，反制。
 static COUNTERSPELL: CardDef = secret(When::OpponentCastsSpell, Effect::Counter);
 
+/// 綠洲盟友：秘密，當一個友方手下受到攻擊時，召喚一個 3/6 水元素（戰場滿了不觸發）。
+static OASIS_ALLY: CardDef = secret(
+    When::FriendlyMinionAttacked,
+    Effect::Summon {
+        card: "CS2_033",
+        count: 1,
+    },
+);
+
+/// 踏板陷阱：秘密，在對手施放法術後，摧毀一個隨機敵方手下（對手沒有手下時不觸發）。
+/// 抽法（同 RosettaStone）：從還活著的敵方手下 `Int(0, n - 1)`。
+static PRESSURE_PLATE: CardDef = secret(
+    When::AfterOpponentCastsSpell,
+    Effect::DestroyRandomEnemyMinion,
+);
+
 /// 爆炸符文：秘密，在對手打出手下後，對其造成 6 點傷害，並將溢傷分給敵方英雄（不受法術傷害影響）。
 static EXPLOSIVE_RUNES: CardDef = secret(
     When::AfterOpponentPlaysMinion,
@@ -64,8 +82,10 @@ fn explosive_runes(g: &mut Game, ctx: &Ctx) {
     };
     let health = g.entity(m).health;
     let owner = g.entity(m).owner;
-    g.deal_damage(m, 6, ctx.owner);
-    let excess = 6 - health;
+    // 6 點加上秘密擁有者的法術傷害；溢出照總量算（第 3a 階段 A1）
+    let total = 6 + g.spell_damage(ctx.owner);
+    g.deal_damage(m, total, ctx.owner);
+    let excess = total - health;
     if excess > 0 {
         let hero = g.player(owner).hero;
         g.deal_damage(hero, excess, ctx.owner);

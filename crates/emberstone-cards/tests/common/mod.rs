@@ -49,6 +49,7 @@ pub fn config(
         shuffle: false,
         rng: RngSource::Seed(1),
         effects: Some(emberstone_cards::lookup),
+        discover_order: None,
     }
 }
 

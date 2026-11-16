@@ -8,6 +8,7 @@ mod basic;
 mod hero_powers;
 mod minions;
 mod secrets;
+mod spells;
 
 use emberstone_core::CardDef;
 
@@ -17,4 +18,5 @@ pub fn lookup(id: &str) -> Option<&'static CardDef> {
         .or_else(|| basic::lookup(id))
         .or_else(|| minions::lookup(id))
         .or_else(|| secrets::lookup(id))
+        .or_else(|| spells::lookup(id))
 }

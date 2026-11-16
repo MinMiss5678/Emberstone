@@ -1,0 +1,12 @@
+diff --git a/Sources/Rosetta/PlayMode/CardSets/TheBarrensCardsGen.cpp b/Sources/Rosetta/PlayMode/CardSets/TheBarrensCardsGen.cpp
+--- a/Sources/Rosetta/PlayMode/CardSets/TheBarrensCardsGen.cpp
++++ b/Sources/Rosetta/PlayMode/CardSets/TheBarrensCardsGen.cpp
+@@ -2401,6 +2401,8 @@ void TheBarrensCardsGen::AddShaman(std::map<std::string, CardDef>& cards)
+     cardDef.ClearData();
+     cardDef.power.AddTrigger(
+         std::make_shared<Trigger>(TriggerType::AFTER_PLAY_MINION));
++    // Only Elementals you play.
++    cardDef.power.GetTrigger()->triggerSource = TriggerSource::FRIENDLY;
+     cardDef.power.GetTrigger()->conditions = SelfCondList{
+         std::make_shared<SelfCondition>(SelfCondition::IsRace(Race::ELEMENTAL))
+     };

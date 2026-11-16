@@ -1,0 +1,16 @@
+diff --git a/Sources/Rosetta/PlayMode/CardSets/UldumCardsGen.cpp b/Sources/Rosetta/PlayMode/CardSets/UldumCardsGen.cpp
+--- a/Sources/Rosetta/PlayMode/CardSets/UldumCardsGen.cpp
++++ b/Sources/Rosetta/PlayMode/CardSets/UldumCardsGen.cpp
+@@ -2156,8 +2156,10 @@ void UldumCardsGen::AddWarlock(std::map<std::string, CardDef>& cards)
+         std::make_shared<DestroyTask>(EntityType::TARGET));
+     cardDef.power.AddPowerTask(
+         std::make_shared<DamageNumberTask>(EntityType::HERO));
+-    cardDef.property.playReqs = PlayReqs{ { PlayReq::REQ_TARGET_TO_PLAY, 0 },
+-                                          { PlayReq::REQ_MINION_TARGET, 0 } };
++    // Playable without a minion to destroy (the Battlecry does nothing).
++    cardDef.property.playReqs =
++        PlayReqs{ { PlayReq::REQ_TARGET_IF_AVAILABLE, 0 },
++                  { PlayReq::REQ_MINION_TARGET, 0 } };
+     cards.emplace("ULD_165", cardDef);
+ 
+     // --------------------------------------- MINION - WARLOCK

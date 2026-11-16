@@ -1,0 +1,72 @@
+diff --git a/Includes/Rosetta/Common/Enums/PlayReqCustom.def b/Includes/Rosetta/Common/Enums/PlayReqCustom.def
+--- a/Includes/Rosetta/Common/Enums/PlayReqCustom.def
++++ b/Includes/Rosetta/Common/Enums/PlayReqCustom.def
+@@ -1,2 +1,3 @@
+ X(REQ_LACKEY_TARGET)
+-X(REQ_TARGET_IF_AVAILABLE_AND_MAXIMUM_CARDS_IN_DECK)
+\ No newline at end of file
++X(REQ_TARGET_IF_AVAILABLE_AND_MAXIMUM_CARDS_IN_DECK)
++X(REQ_TARGET_IF_AVAILABLE_AND_WEAPON_EQUIPPED)
+\ No newline at end of file
+diff --git a/Includes/Rosetta/PlayMode/Loaders/TargetingPredicates.hpp b/Includes/Rosetta/PlayMode/Loaders/TargetingPredicates.hpp
+--- a/Includes/Rosetta/PlayMode/Loaders/TargetingPredicates.hpp
++++ b/Includes/Rosetta/PlayMode/Loaders/TargetingPredicates.hpp
+@@ -131,6 +131,10 @@ class TargetingPredicates
+     //! \return Generated AvailabilityPredicate for intended purpose.
+     static AvailabilityPredicate ElementalPlayedLastTurn();
+ 
++    //! Predicate wrapper for checking the player has a weapon equipped.
++    //! \return Generated AvailabilityPredicate for intended purpose.
++    static AvailabilityPredicate WeaponEquipped();
++
+     //! Predicate wrapper for checking the deck contains \p value cards at most.
+     //! \param value The number of maximum cards in deck.
+     //! \return Generated AvailabilityPredicate for intended purpose.
+diff --git a/Sources/Rosetta/PlayMode/Loaders/TargetingPredicates.cpp b/Sources/Rosetta/PlayMode/Loaders/TargetingPredicates.cpp
+--- a/Sources/Rosetta/PlayMode/Loaders/TargetingPredicates.cpp
++++ b/Sources/Rosetta/PlayMode/Loaders/TargetingPredicates.cpp
+@@ -188,6 +188,13 @@ AvailabilityPredicate TargetingPredicates::ElementalPlayedLastTurn()
+     };
+ }
+ 
++AvailabilityPredicate TargetingPredicates::WeaponEquipped()
++{
++    return [](const Player* player, [[maybe_unused]] Card* card) {
++        return player->GetHero()->HasWeapon();
++    };
++}
++
+ AvailabilityPredicate TargetingPredicates::MaximumCardsInDeck(int value)
+ {
+     return [value](const Player* player, [[maybe_unused]] Card* card) {
+diff --git a/Sources/Rosetta/PlayMode/Cards/Card.cpp b/Sources/Rosetta/PlayMode/Cards/Card.cpp
+--- a/Sources/Rosetta/PlayMode/Cards/Card.cpp
++++ b/Sources/Rosetta/PlayMode/Cards/Card.cpp
+@@ -155,6 +155,11 @@ void Card::Initialize()
+                     TargetingPredicates::MaximumCardsInDeck(
+                         requirement.second));
+                 break;
++            case PlayReq::REQ_TARGET_IF_AVAILABLE_AND_WEAPON_EQUIPPED:
++                needsTarget = true;
++                targetingAvailabilityPredicate.emplace_back(
++                    TargetingPredicates::WeaponEquipped());
++                break;
+             default:
+                 continue;
+         }
+diff --git a/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp b/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
+--- a/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
++++ b/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
+@@ -4584,8 +4584,10 @@ void CoreCardsGen::AddNeutral(std::map<std::string, CardDef>& cards)
+                                 SelfCondition::IsWeaponEquipped()) }));
+     cardDef.power.AddPowerTask(std::make_shared<FlagTask>(
+         true, TaskList{ std::make_shared<DamageTask>(EntityType::TARGET, 2) }));
+-    cardDef.property.playReqs =
+-        PlayReqs{ { PlayReq::REQ_TARGET_IF_AVAILABLE, 0 } };
++    // Only needs a target with a weapon equipped.
++    cardDef.property.playReqs = PlayReqs{
++        { PlayReq::REQ_TARGET_IF_AVAILABLE_AND_WEAPON_EQUIPPED, 0 }
++    };
+     cards.emplace("CS3_022", cardDef);
+ 
+     // --------------------------------------- MINION - NEUTRAL

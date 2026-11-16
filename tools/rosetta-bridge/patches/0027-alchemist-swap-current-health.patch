@@ -1,0 +1,77 @@
+diff --git a/Includes/Rosetta/PlayMode/Auras/AdaptiveEffect.hpp b/Includes/Rosetta/PlayMode/Auras/AdaptiveEffect.hpp
+--- a/Includes/Rosetta/PlayMode/Auras/AdaptiveEffect.hpp
++++ b/Includes/Rosetta/PlayMode/Auras/AdaptiveEffect.hpp
+@@ -48,6 +48,13 @@ class AdaptiveEffect : public IAura
+     //! \param clone The entity to clone aura effect.
+     void Clone(Playable* clone) override;
+ 
++    //! Forgets the applied value (it was folded into the stats), so the
++    //! next update applies it again.
++    void ForgetAppliedValue()
++    {
++        m_lastValue = 0;
++    }
++
+  private:
+     //! Constructs adaptive effect with given \p prototype and \p owner.
+     //! \param prototype An adaptive effect for prototype.
+diff --git a/Includes/Rosetta/PlayMode/Auras/EnrageEffect.hpp b/Includes/Rosetta/PlayMode/Auras/EnrageEffect.hpp
+--- a/Includes/Rosetta/PlayMode/Auras/EnrageEffect.hpp
++++ b/Includes/Rosetta/PlayMode/Auras/EnrageEffect.hpp
+@@ -40,6 +40,13 @@ class EnrageEffect : public Aura
+     //! \param clone The entity to clone aura effect.
+     void Clone(Playable* clone) override;
+ 
++    //! Forgets the enraged state (the bonus was folded into the stats),
++    //! so it is not removed again; taking damage later enrages anew.
++    void ForgetEnraged()
++    {
++        m_enraged = false;
++    }
++
+  private:
+     //! Constructs enrage effect with given \p prototype and \p owner.
+     //! \param prototype An enrage effect for prototype.
+diff --git a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/SwapAttackHealthTask.cpp b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/SwapAttackHealthTask.cpp
+--- a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/SwapAttackHealthTask.cpp
++++ b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/SwapAttackHealthTask.cpp
+@@ -3,6 +3,10 @@
+ // RosettaStone is hearthstone simulator using C++ with reinforcement learning.
+ // Copyright (c) 2017-2024 Chris Ohk
+ 
++#include <Rosetta/Common/Utils.hpp>
++#include <Rosetta/PlayMode/Auras/AdaptiveEffect.hpp>
++#include <Rosetta/PlayMode/Auras/EnrageEffect.hpp>
++#include <Rosetta/PlayMode/Games/Game.hpp>
+ #include <Rosetta/PlayMode/Models/Minion.hpp>
+ #include <Rosetta/PlayMode/Tasks/SimpleTasks/IncludeTask.hpp>
+ #include <Rosetta/PlayMode/Tasks/SimpleTasks/SwapAttackHealthTask.hpp>
+@@ -34,6 +38,28 @@ TaskStatus SwapAttackHealthTask::Impl(Player* player)
+ 
+         attackEffect.ApplyTo(playable);
+         healthEffect.ApplyTo(playable);
++
++        // The current Health becomes the new maximum (damage is cleared),
++        // and this-turn buffs are kept in the swapped stats.
++        minion->SetDamage(0);
++        EraseIf(minion->game->oneTurnEffects,
++                [minion](const auto& e) { return e.first == minion; });
++
++        // A self effect like Tar Creeper's is folded into the new stats and
++        // then applies again.
++        if (const auto adaptive =
++                dynamic_cast<AdaptiveEffect*>(minion->ongoingEffect))
++        {
++            adaptive->ForgetAppliedValue();
++        }
++
++        // The minion is undamaged now; an Enrage bonus was folded into the
++        // swapped stats and is not taken off again.
++        if (const auto enrage =
++                dynamic_cast<EnrageEffect*>(minion->ongoingEffect))
++        {
++            enrage->ForgetEnraged();
++        }
+     }
+ 
+     return TaskStatus::COMPLETE;

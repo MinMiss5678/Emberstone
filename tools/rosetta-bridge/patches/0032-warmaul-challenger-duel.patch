@@ -1,0 +1,36 @@
+diff --git a/Sources/Rosetta/PlayMode/CardSets/BlackTempleCardsGen.cpp b/Sources/Rosetta/PlayMode/CardSets/BlackTempleCardsGen.cpp
+--- a/Sources/Rosetta/PlayMode/CardSets/BlackTempleCardsGen.cpp
++++ b/Sources/Rosetta/PlayMode/CardSets/BlackTempleCardsGen.cpp
+@@ -1962,19 +1962,29 @@ void BlackTempleCardsGen::AddWarrior(std::map<std::string, CardDef>& cards)
+     cardDef.ClearData();
+     cardDef.power.AddPowerTask(std::make_shared<CustomTask>(
+         [](Player* player, Entity* source, Playable* target) {
++            // No enemy minion to choose: the Battlecry does nothing.
++            if (!target)
++            {
++                return TaskStatus::COMPLETE;
++            }
++
+             const auto& attackTask = std::make_shared<AttackTask>(
+                 EntityType::SOURCE, EntityType::TARGET, true);
+             const auto& condition =
+                 std::make_shared<SelfCondition>(SelfCondition::IsDead());
++            const auto attacker = dynamic_cast<Playable*>(source);
+ 
+             attackTask->SetPlayer(player);
+             attackTask->SetSource(source);
+             attackTask->SetTarget(target);
+ 
+-            while (true)
++            // At most 30 attacks; stop when either dies or leaves play.
++            for (int i = 0; i < 30; ++i)
+             {
+-                if (condition->Evaluate(dynamic_cast<Playable*>(source)) ||
+-                    condition->Evaluate(dynamic_cast<Playable*>(target)))
++                if (condition->Evaluate(attacker) ||
++                    condition->Evaluate(target) ||
++                    attacker->GetZoneType() != ZoneType::PLAY ||
++                    target->GetZoneType() != ZoneType::PLAY)
+                 {
+                     break;
+                 }

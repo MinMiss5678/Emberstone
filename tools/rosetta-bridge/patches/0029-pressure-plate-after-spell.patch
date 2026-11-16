@@ -1,0 +1,14 @@
+diff --git a/Sources/Rosetta/PlayMode/CardSets/UldumCardsGen.cpp b/Sources/Rosetta/PlayMode/CardSets/UldumCardsGen.cpp
+--- a/Sources/Rosetta/PlayMode/CardSets/UldumCardsGen.cpp
++++ b/Sources/Rosetta/PlayMode/CardSets/UldumCardsGen.cpp
+@@ -513,8 +513,9 @@ void UldumCardsGen::AddHunter(std::map<std::string, CardDef>& cards)
+     // - SECRET = 1
+     // --------------------------------------------------------
+     cardDef.ClearData();
++    // After the spell resolves (not when it is cast).
+     cardDef.power.AddTrigger(
+-        std::make_shared<Trigger>(TriggerType::CAST_SPELL));
++        std::make_shared<Trigger>(TriggerType::AFTER_CAST));
+     cardDef.power.GetTrigger()->triggerSource = TriggerSource::ENEMY_SPELLS;
+     cardDef.power.GetTrigger()->conditions = SelfCondList{
+         std::make_shared<SelfCondition>(SelfCondition::IsFieldNotEmpty())

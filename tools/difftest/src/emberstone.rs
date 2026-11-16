@@ -1,8 +1,11 @@
 //! 把 Emberstone 引擎接到差分測試：開局、行動與快照都用橋接程式的格式。
 
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
 use emberstone_core as core;
 use emberstone_core::{Game, GameConfig, PlayerConfig, RngSource};
-use emberstone_data::card_by_id;
+use emberstone_data::{Card, card_by_id};
 
 use crate::actions::{Action, Target};
 use crate::bridge::{GameSetup, PlayerSetup, RngMode};
@@ -59,6 +62,26 @@ fn to_core_event(e: &RngEvent) -> core::RngEvent {
     }
 }
 
+/// RosettaStone 以原版卡號實作的卡：我們的卡號 → 原版卡的 dbfId（從牌庫發現時照它排序）。
+static ROSETTA_DBF: OnceLock<HashMap<&'static str, u32>> = OnceLock::new();
+
+/// 設定 RosettaStone 改用原版卡號的卡（我們的卡號 → 原版卡號）；整個程式只設定一次。
+pub fn set_rosetta_ids(renamed: &HashMap<String, String>) {
+    let map = renamed
+        .iter()
+        .filter_map(|(ours, theirs)| Some((card_by_id(ours)?.id, card_by_id(theirs)?.dbf_id)))
+        .collect();
+    let _ = ROSETTA_DBF.set(map);
+}
+
+/// 從牌庫發現的排序鍵：和 RosettaStone 一樣用它那張卡的 dbfId。
+fn rosetta_dbf(card: &'static Card) -> u32 {
+    ROSETTA_DBF
+        .get()
+        .and_then(|m| m.get(card.id).copied())
+        .unwrap_or(card.dbf_id)
+}
+
 /// 照橋接程式的開局設定建立對局（不洗牌；記錄模式用種子，重播模式照事件序列）。
 pub fn new_game(setup: &GameSetup) -> Result<Game, String> {
     let rng = match &setup.rng {
@@ -72,6 +95,7 @@ pub fn new_game(setup: &GameSetup) -> Result<Game, String> {
         shuffle: false,
         rng,
         effects: Some(emberstone_cards::lookup),
+        discover_order: Some(rosetta_dbf),
     })
     .map_err(|e| format!("開局失敗：{e:?}"))
 }

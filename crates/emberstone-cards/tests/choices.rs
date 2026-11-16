@@ -166,6 +166,37 @@ fn f3_discover_from_deck() {
     assert!(g.legal_actions().contains(&Action::End));
 }
 
+/// dbfId 由大到小（測試用的排序鍵）。
+fn reversed_dbf(card: &'static emberstone_data::Card) -> u32 {
+    u32::MAX - card.dbf_id
+}
+
+// 第 3a 階段 G1：從牌庫發現的排序鍵可以換掉（差分測試讓 RosettaStone 用原版卡號的卡照原版 dbfId 排序）
+#[test]
+fn stage3a_g1_discover_order_key() {
+    let mut cfg = config(
+        HUNTER,
+        deck(
+            &[
+                "CS2_120", "CS2_120", "CS2_120", "CS2_120", "CS2_182", "CS2_168",
+            ],
+            30,
+        ),
+        WARRIOR,
+        deck(&[], 30),
+    );
+    // 依排序鍵：淡水鱷、劫掠者、雪人；洗牌後第 i 個放原本的第 perm[i] 個 → 雪人、淡水鱷、劫掠者
+    cfg.rng = RngSource::Scripted(vec![RngEvent::Shuffle {
+        n: 3,
+        perm: vec![2, 0, 1],
+    }]);
+    cfg.discover_order = Some(reversed_dbf);
+    let mut g = Game::new(cfg).expect("開局失敗");
+    cast(&mut g, "CORE_DS1_184", None, None);
+    act(&mut g, Action::Choose { index: 1 });
+    assert_eq!(hand_ids(&g, 0).last(), Some(&"CS2_120"));
+}
+
 // F4：隨機效果（瘋狂炸彈客）：3 次各從「其他角色」挑一個（自己的其他手下、自己的英雄、對手的手下、對手的英雄）
 #[test]
 fn f4_mad_bomber_follows_script() {

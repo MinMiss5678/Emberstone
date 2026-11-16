@@ -1,7 +1,19 @@
 diff --git a/Sources/Rosetta/PlayMode/Actions/Generic.cpp b/Sources/Rosetta/PlayMode/Actions/Generic.cpp
 --- a/Sources/Rosetta/PlayMode/Actions/Generic.cpp
 +++ b/Sources/Rosetta/PlayMode/Actions/Generic.cpp
-@@ -350,7 +350,9 @@
+@@ -336,7 +336,10 @@ void ChangeEntity(Player* player, Playable* playable, Card* newCard,
+         {
+             if (!minion->HasCharge())
+             {
+-                if (minion->HasRush())
++                // Rush only lets it attack if the opponent has minions now;
++                // otherwise it is like any new minion (stays frozen longer).
++                if (minion->HasRush() &&
++                    !player->opponent->GetFieldZone()->IsEmpty())
+                 {
+                     minion->SetExhausted(false);
+                     minion->SetAttackableByRush(true);
+@@ -350,7 +353,9 @@ void ChangeEntity(Player* player, Playable* playable, Card* newCard,
              }
              else
              {
@@ -15,7 +27,19 @@ diff --git a/Sources/Rosetta/PlayMode/Actions/Generic.cpp b/Sources/Rosetta/Play
 diff --git a/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp b/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
 --- a/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
 +++ b/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp
-@@ -100,6 +100,12 @@
+@@ -89,7 +89,10 @@ void FieldZone::Add(Playable* entity, int zonePos)
+     {
+         if (!minion->HasCharge())
+         {
+-            if (minion->HasRush())
++            // Rush only lets it attack if the opponent has minions now;
++            // otherwise it is like any new minion (stays frozen longer).
++            if (minion->HasRush() &&
++                !minion->player->opponent->GetFieldZone()->IsEmpty())
+             {
+                 minion->SetAttackableByRush(true);
+                 minion->game->rushMinions.emplace_back(
+@@ -100,6 +103,12 @@ void FieldZone::Add(Playable* entity, int zonePos)
                  minion->SetExhausted(true);
              }
          }
@@ -28,3 +52,14 @@ diff --git a/Sources/Rosetta/PlayMode/Zones/FieldZone.cpp b/Sources/Rosetta/Play
      }
  
      character->orderOfPlay = character->game->GetNextOOP();
+@@ -183,7 +192,9 @@ void FieldZone::Replace(Minion* oldEntity, Minion* newEntity)
+ 
+     if (!newEntity->HasCharge())
+     {
+-        if (newEntity->HasRush())
++        // Rush only lets it attack if the opponent has minions now.
++        if (newEntity->HasRush() &&
++            !newEntity->player->opponent->GetFieldZone()->IsEmpty())
+         {
+             newEntity->SetAttackableByRush(true);
+             newEntity->game->rushMinions.emplace_back(
