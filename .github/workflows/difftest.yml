@@ -10,10 +10,14 @@ on:
       - "tools/difftest/**"
       - "data/batches.tsv"
       - "data/keyword_pool.txt"
+      - "data/stage2_pool.txt"
+      - "data/stage3a_pool.txt"
       - ".github/workflows/difftest.yml"
-      # difftest 組牌時查 emberstone-data 的卡片資料，並和 emberstone-core 比對；相依套件與工具鏈版本也會影響結果
+      # difftest 組牌時查 emberstone-data 的卡片資料，並和 emberstone-core、emberstone-cards（卡片效果）比對；
+      # 相依套件與工具鏈版本也會影響結果
       - "crates/emberstone-data/**"
       - "crates/emberstone-core/**"
+      - "crates/emberstone-cards/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -82,10 +86,19 @@ jobs:
           set "VCPKG_ROOT=%VCPKG_INSTALLATION_ROOT%"
           call tools\rosetta-bridge\build.bat
 
+      # 到這裡為止任一步失敗（取不到原始碼、編譯失敗）就停下，後面全部不跑（快取命中時編譯被略過不算失敗）。
+      # 之後的測試與各卡池比對彼此獨立：只要準備完成，前一個失敗也照跑，一次看到全部結果；
+      # 任何一步失敗整個工作流程仍算失敗。
+      - name: 準備完成
+        id: ready
+        run: echo "橋接程式就緒"
+
       - name: 橋接程式測試
+        if: ${{ !cancelled() && steps.ready.outcome == 'success' }}
         run: cargo test -p emberstone-difftest --test bridge
 
       - name: 隨機對局差分（記錄與重播比對）
+        if: ${{ !cancelled() && steps.ready.outcome == 'success' }}
         run: |
           GAMES="${{ github.event.inputs.games || '100' }}"
           cargo run --release -p emberstone-difftest --bin difftest -- \
@@ -101,6 +114,7 @@ jobs:
           if grep -q '：不一致' difftest.txt; then exit 1; fi
 
       - name: 純關鍵字卡池差分（Emberstone 對 RosettaStone）
+        if: ${{ !cancelled() && steps.ready.outcome == 'success' }}
         run: |
           GAMES="${{ github.event.inputs.games || '100' }}"
           cargo run --release -p emberstone-difftest --bin difftest -- \
@@ -113,3 +127,34 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           cat keywords.txt
           if grep -q '：不一致' keywords.txt; then exit 1; fi
+
+      # 第 2 階段（英雄技能、法術、戰吼、死亡之聲、秘密等）與第 3a 階段（批次 A）卡池，都帶英雄技能
+      - name: 第 2 階段卡池差分（Emberstone 對 RosettaStone）
+        if: ${{ !cancelled() && steps.ready.outcome == 'success' }}
+        run: |
+          GAMES="${{ github.event.inputs.games || '100' }}"
+          cargo run --release -p emberstone-difftest --bin difftest -- \
+            run --engine emberstone --pool stage2 --powers --games "$GAMES" --seed "${{ github.run_number }}" > stage2.txt || true
+          {
+            echo '## 差分測試（Emberstone，第 2 階段卡池）'
+            echo '```'
+            grep -v '：一致$' stage2.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat stage2.txt
+          if grep -q '：不一致' stage2.txt; then exit 1; fi
+
+      - name: 第 3a 階段卡池差分（Emberstone 對 RosettaStone）
+        if: ${{ !cancelled() && steps.ready.outcome == 'success' }}
+        run: |
+          GAMES="${{ github.event.inputs.games || '100' }}"
+          cargo run --release -p emberstone-difftest --bin difftest -- \
+            run --engine emberstone --pool stage3a --powers --games "$GAMES" --seed "${{ github.run_number }}" > stage3a.txt || true
+          {
+            echo '## 差分測試（Emberstone，第 3a 階段卡池）'
+            echo '```'
+            grep -v '：一致$' stage3a.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat stage3a.txt
+          if grep -q '：不一致' stage3a.txt; then exit 1; fi
