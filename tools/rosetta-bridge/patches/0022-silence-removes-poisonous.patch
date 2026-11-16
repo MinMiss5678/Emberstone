@@ -1,11 +1,23 @@
 diff --git a/Sources/Rosetta/PlayMode/Models/Minion.cpp b/Sources/Rosetta/PlayMode/Models/Minion.cpp
 --- a/Sources/Rosetta/PlayMode/Models/Minion.cpp
 +++ b/Sources/Rosetta/PlayMode/Models/Minion.cpp
-@@ -160,6 +160,7 @@
+@@ -160,11 +160,19 @@ void Minion::Silence()
      SetGameTag(BATTLECRY, 0);
      SetGameTag(INSPIRE, 0);
      SetGameTag(LIFESTEAL, 0);
 +    SetGameTag(POISONOUS, 0);
++    SetGameTag(FREEZE, 0);
      SetGameTag(CANT_BE_TARGETED_BY_HERO_POWERS, 0);
      SetGameTag(CANT_BE_TARGETED_BY_SPELLS, 0);
      SetGameTag(IMMUNE, 0);
+     SetGameTag(CANT_ATTACK, 0);
+     SetGameTag(RUSH, 0);
++    // A Rush minion played this turn loses Rush and can no longer attack.
++    if (IsAttackableByRush())
++    {
++        SetAttackableByRush(false);
++        SetExhausted(true);
++    }
+     SetGameTag(REBORN, 0);
+     SetGameTag(SPELLPOWER, 0);
+     SetGameTag(SPELLPOWER_ARCANE, 0);

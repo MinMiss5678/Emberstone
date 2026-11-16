@@ -48,16 +48,25 @@ tools\rosetta-bridge\build.bat
     - 本回合加成不再於回合結束時從手牌上的卡扣掉（case E6；RosettaStone 原本會讓重新打出的手下攻擊力變 0）
     - 受傷加成（血蹄勇戰者）在沉默或離場時不再多扣一次攻擊力（case E7、H1）
   - `0015-random-split-no-target.patch`：「隨機分配給其他角色」沒有可選的角色時，該發不造成傷害（case F4b；RosettaStone 原本會打在上一發選中的目標上）
-  - `0016-explosive-runes-divine-shield.patch`：爆炸符文打到聖盾手下時，聖盾只吸收等於手下生命的傷害，其餘打英雄（case I4a，依 Hearthstone Wiki；RosettaStone 原本只在手下死亡時才溢出）
+  - `0016-explosive-runes-divine-shield.patch`：爆炸符文打到聖盾手下時，聖盾只吸收等於手下生命的傷害，其餘打英雄（case I4a，依 Hearthstone Wiki；RosettaStone 原本只在手下死亡時才溢出）；6 點加上法術傷害、溢出照總量算（第 3a 階段 A1，實測 R10；RosettaStone 原本用 6 − 生命 再加法術傷害，生命正好 6 時少算溢出）
   - （`0017` 已撤掉：原本依 Wiki 的解讀讓戰吼後不先處理死亡；使用者實測證明戰吼後會先進入死亡階段，RosettaStone 原本的做法才對，case C1、C6）
   - `0018-freeze-thaw-attacks-left.patch`：在自己回合被凍結、攻擊次數還沒用完（例如風怒只攻擊一次）的手下，本回合結束就解凍（第 1 階段 case D9a，依 Wiki Freeze）
   - `0019-zero-cost-with-overload.patch`：超載超過水晶上限讓可用法力變成負的時候，0 費的牌照樣能打出（第 1 階段 case B3a，依 Wiki Mana）
-  - `0022-silence-removes-poisonous.patch`：沉默也移除致命劇毒（case H1；RosettaStone 原本漏了這個關鍵字，被沉默的劇毒手下仍會消滅攻擊者）
+  - `0022-silence-removes-poisonous.patch`：沉默也移除致命劇毒與凍結效果（case H1；RosettaStone 原本漏了這兩個關鍵字，被沉默的劇毒手下仍會消滅攻擊者、被沉默的水元素仍會凍結）；剛上場的衝刺手下被沉默後當回合不能攻擊（case H1、第 1 階段 C3；RosettaStone 原本沉默後仍可攻擊手下）
   - `0021-aura-update-second-pass.patch`：更新被動加成時多跑一輪，讓「受傷時」的加成看到其他加成移除後的生命（例如暴風城勇士在戰鬥中死亡，剛好回滿的血蹄勇戰者立刻失去 +3 攻擊；case E4、E7）
   - `0020-transform-keeps-play-order.patch`：變形後的手下保留原本的上場順序（case F1b，使用者實測；Wiki 寫「排到最後面」與實測不符，RosettaStone 原本照 Wiki）
   - `0023-transform-removes-trigger.patch`：變形時移除原本手下的觸發效果（case F1；RosettaStone 原本留著，例如被變成綿羊的治療圖騰每回合結束仍會治療）
-  - `0024-silenced-charge-exhausted.patch`：剛上場的衝鋒手下也標記為「剛上場」（衝鋒讓它照樣能攻擊），這回合被沉默失去衝鋒後就不能攻擊（case H1；RosettaStone 原本沉默後仍可攻擊）
+  - `0024-silenced-charge-exhausted.patch`：剛上場的衝鋒手下也標記為「剛上場」（衝鋒讓它照樣能攻擊），這回合被沉默失去衝鋒後就不能攻擊（case H1；RosettaStone 原本沉默後仍可攻擊）；衝刺手下上場時對手沒有手下，視同一般剛上場的手下（本回合不能攻擊，被凍結時到下一個自己的回合結束才解凍；第 3a 階段 H8，實測 R11）
   - `0025-aoe-hits-mortally-wounded.patch`：全場傷害（全部角色／全部手下／敵方／友方）也打到生命已歸零、還沒移出戰場的手下，例如同一批的第二個死亡之聲照樣打到第一個打死的手下，白沫狂戰士也照算（case D6，使用者實測；RosettaStone 原本列戰場時一律排除，隨機目標維持排除）
+  - `0026-fogsail-target-needs-weapon.patch`：霧帆掠劫者（`CS3_022`）只有裝備武器時才要選戰吼目標（第 3a 階段 B5；RosettaStone 原本沒有武器也要選，新增 `REQ_TARGET_IF_AVAILABLE_AND_WEAPON_EQUIPPED`）
+  - `0027-alchemist-swap-current-health.patch`：瘋狂的鍊金師對調後清掉傷害（目前生命成為新的上限），本回合的加成併入對調後的數值、回合結束不再扣；焦油蠕行者「對手回合 +2」併入後再套用一次；激怒的加成併入後不再扣掉（第 3a 階段 C7、H1；RosettaStone 原本保留傷害，受傷的手下會變成 0 以下，+2 也不再套用，激怒中的葛羅瑪許對調後再被扣 6 攻擊）
+  - `0028-wailing-vapor-friendly-only.patch`：哀嚎水氣（`WC_042`）只在自己打出元素後觸發（第 3a 階段 D4；RosettaStone 原本對手打出也觸發）
+  - `0029-pressure-plate-after-spell.patch`：踏板陷阱（`ULD_152`）在對手的法術結算完才觸發（第 3a 階段 E2；RosettaStone 原本在施放時、結算前觸發）
+  - `0030-adaptive-effect-silence.patch`：「依情況變化」的數值效果（焦油蠕行者）被沉默時立刻扣回已加的值（第 3a 階段 D2；RosettaStone 原本在沉默重設數值後才扣，攻擊力變成 0）；離場時數值已重設，不再扣（否則回到手牌再打出會變成 0 攻）
+  - `0031-forced-attack-not-exhausted.patch`：效果要求的攻擊（伊利達瑞審判官跟著英雄攻擊、戰槌挑戰者互打）不會用掉攻擊次數（第 3a 階段 D5，使用者實測 R4；RosettaStone 原本攻擊後就不能再攻擊）
+  - `0032-warmaul-challenger-duel.patch`：戰槌挑戰者（`BT_120`）沒有目標時戰吼不發動；互打最多 30 次，任一方死亡或離場就停止（第 3a 階段 D6；RosettaStone 原本沒有目標會內部錯誤，一方離場會無窮迴圈）
+  - `0033-boomkin-damage-not-spell.patch`：平衡梟獸二選一的「造成 4 點傷害」（`ONY_018t2`）是手下效果，不加法術傷害（第 3a 階段 A1；RosettaStone 原本當成法術傷害）
+  - `0034-riftcleaver-target-if-available.patch`：惡魔斬隙者（`ULD_165`）沒有手下可以摧毀時照樣能打出，戰吼不發動（第 3a 階段 B4；RosettaStone 原本必須有目標才能打出）
 
 ## 協定
 

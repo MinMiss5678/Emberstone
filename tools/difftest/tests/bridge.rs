@@ -2,7 +2,7 @@
 //! 需要先編好橋接程式（tools/rosetta-bridge/build.bat）；主要 CI 不跑這個測試檔。
 //! 橋接程式位置可用環境變數 EMBERSTONE_ROSETTA_BRIDGE 指定。
 
-use emberstone_difftest::actions::Action;
+use emberstone_difftest::actions::{Action, Target};
 use emberstone_difftest::bridge::{Bridge, GameSetup, PlayerSetup, RngMode};
 use emberstone_difftest::rng::RngEvent;
 use emberstone_difftest::snapshot::Snapshot;
@@ -1325,6 +1325,561 @@ fn stage2_g2_example_pool() {
         "emberstone",
         "--pool",
         "stage2",
+        "--powers",
+        "--games",
+        "3",
+        "--seed",
+        "1",
+    ]);
+    assert!(out.contains("一致 3/3"), "{out}");
+}
+
+// 第 3a 階段 G1：第 3a 卡池加上英雄技能，Emberstone 和 RosettaStone 逐步一致
+// 第 3a 階段 H1（橋接程式，patch）：鍊金師對調對手回合的焦油蠕行者，+2 再套用一次 → 7/3（實測 R7）
+#[test]
+fn stage3a_h1_alchemist_tar_creeper_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(&["CORE_UNG_928"], "WARRIOR", &["CORE_EX1_059"]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 5);
+    play_id(&mut b, &s, 0, "CORE_UNG_928", Some(0), None);
+    let s = b.act(&Action::End).unwrap();
+    let c = &s.players[0].board[0];
+    assert_eq!((c.attack, c.health), (3, 5));
+    let s = play_id(
+        &mut b,
+        &s,
+        1,
+        "CORE_EX1_059",
+        Some(0),
+        Some(target_minion(1, 0)),
+    );
+    let c = &s.players[0].board[0];
+    assert_eq!((c.attack, c.health), (7, 3));
+}
+
+// 第 3a 階段 G1：第 3a 卡池加上英雄技能，Emberstone 和 RosettaStone 逐步一致
+// 第 3a 階段 A1（橋接程式，patch）：平衡梟獸二選一的「造成 4 點傷害」是手下效果，不加法術傷害
+#[test]
+fn stage3a_a1_boomkin_damage_not_spell_on_bridge() {
+    let mut b = bridge();
+    let setup = GameSetup {
+        p1: PlayerSetup {
+            class: "DRUID".into(),
+            deck: deck(&["CS3_007", "ONY_018"]),
+        },
+        p2: PlayerSetup {
+            class: "WARRIOR".into(),
+            deck: deck(&[]),
+        },
+        rng: RngMode::Record { seed: 7 },
+    };
+    let s = b.new_game(&setup).unwrap();
+    let s = play_id(&mut b, &s, 0, "CS3_007", Some(0), None); // 見習電擊手：法術傷害 +1
+    let s = end_until(&mut b, s, 9);
+    let hand = hand_pos(&s, 0, "ONY_018");
+    let s = b
+        .act(&Action::Play {
+            hand,
+            pos: Some(1),
+            target: Some(Target::Hero { player: 2 }),
+            choose_one: 2,
+        })
+        .unwrap();
+    assert_eq!(s.players[1].hero.health, 26);
+}
+
+// 第 3a 階段 H1（橋接程式，patch）：被沉默的水元素不再凍結被它傷害的角色
+#[test]
+fn stage3a_h1_silenced_water_elemental_does_not_freeze_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(&["CS2_033"], "WARRIOR", &["CORE_CS2_203", "CS2_182"]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 7);
+    play_id(&mut b, &s, 0, "CS2_033", Some(0), None); // 水元素 3/6
+    let s = b.act(&Action::End).unwrap();
+    let s = play_id(
+        &mut b,
+        &s,
+        1,
+        "CORE_CS2_203",
+        Some(0),
+        Some(target_minion(1, 0)),
+    );
+    let s = end_until(&mut b, s, 10);
+    play_id(&mut b, &s, 1, "CS2_182", Some(1), None);
+    let s = b.act(&Action::End).unwrap();
+    let s = end_until(&mut b, s, 12);
+    let yeti = s.players[1]
+        .board
+        .iter()
+        .position(|m| m.card == "CS2_182")
+        .unwrap();
+    let s = b
+        .act(&Action::Attack {
+            attacker: target_minion(2, yeti),
+            target: target_minion(1, 0),
+        })
+        .unwrap();
+    let y = &s.players[1].board[yeti];
+    assert_eq!(y.health, 2);
+    assert!(!y.frozen);
+}
+
+// 第 3a 階段 G1：第 3a 卡池加上英雄技能，Emberstone 和 RosettaStone 逐步一致
+// 第 3a 階段 D2（橋接程式，patch）：焦油蠕行者回到手牌再打出，攻擊力照常（自己回合 1、對手回合 3）
+#[test]
+fn stage3a_d2_tar_creeper_returned_to_hand_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(&["CORE_UNG_928"], "HUNTER", &["CORE_EX1_611"]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 4);
+    let s = play_id(&mut b, &s, 1, "CORE_EX1_611", None, None); // 冰凍陷阱
+    let s = end_until(&mut b, s, 5);
+    play_id(&mut b, &s, 0, "CORE_UNG_928", Some(0), None);
+    let s = b.act(&Action::End).unwrap();
+    end_until(&mut b, s, 7);
+    let s = b
+        .act(&Action::Attack {
+            attacker: target_minion(1, 0),
+            target: Target::Hero { player: 2 },
+        })
+        .unwrap(); // 冰凍陷阱送回手牌
+    assert!(s.players[0].board.is_empty());
+    let s = end_until(&mut b, s, 9);
+    let s = play_id(&mut b, &s, 0, "CORE_UNG_928", Some(0), None);
+    assert_eq!(s.players[0].board[0].attack, 1);
+    let s = b.act(&Action::End).unwrap();
+    assert_eq!(s.players[0].board[0].attack, 3);
+}
+
+// 第 3a 階段 D5（橋接程式，patch）：伊利達瑞審判官跟著英雄攻擊後，本回合仍可自己攻擊（實測 R4）
+#[test]
+fn stage3a_d5_inquisitor_can_attack_after_follow_on_bridge() {
+    let mut b = bridge();
+    let setup = GameSetup {
+        p1: PlayerSetup {
+            class: "DEMONHUNTER".into(),
+            deck: deck(&["CS3_020"]),
+        },
+        p2: PlayerSetup {
+            class: "WARRIOR".into(),
+            deck: deck(&[]),
+        },
+        rng: RngMode::Record { seed: 7 },
+    };
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 15);
+    play_id(&mut b, &s, 0, "CS3_020", Some(0), None);
+    let s = b.act(&Action::End).unwrap();
+    let s = end_until(&mut b, s, 17);
+    b.act(&Action::Power { target: None }).unwrap(); // 惡魔之爪 +1 攻擊力
+    let s2 = b
+        .act(&Action::Attack {
+            attacker: Target::Hero { player: 1 },
+            target: Target::Hero { player: 2 },
+        })
+        .unwrap();
+    assert_eq!(s2.players[1].hero.health, s.players[1].hero.health - 9);
+    let attacks: Vec<Action> = b
+        .options()
+        .unwrap()
+        .into_iter()
+        .filter(|a| {
+            matches!(
+                a,
+                Action::Attack {
+                    attacker: Target::Minion { .. },
+                    ..
+                }
+            )
+        })
+        .collect();
+    assert!(!attacks.is_empty(), "審判官應該還能攻擊");
+}
+
+// 第 3a 階段 D6（橋接程式，patch）：戰槌挑戰者沒有目標時照常打出、戰吼不發動
+#[test]
+fn stage3a_d6_warmaul_without_target_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(&["BT_120"], "WARRIOR", &[]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 5);
+    let s = play_id(&mut b, &s, 0, "BT_120", Some(0), None);
+    assert_eq!(s.players[0].board[0].card, "BT_120");
+}
+
+// 第 3a 階段 D6（橋接程式，patch）：挑戰者攻擊時觸發冰凍陷阱、被送回手牌，互打就結束
+#[test]
+fn stage3a_d6_warmaul_freezing_trap_ends_duel_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(&["BT_120"], "HUNTER", &["CORE_EX1_611", "CS2_182"]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 4);
+    let s = play_id(&mut b, &s, 1, "CORE_EX1_611", None, None);
+    let s = end_until(&mut b, s, 8);
+    let s = play_id(&mut b, &s, 1, "CS2_182", Some(0), None);
+    let s = end_until(&mut b, s, 9);
+    let s = play_id(&mut b, &s, 0, "BT_120", Some(0), Some(target_minion(2, 0)));
+    assert!(s.players[0].board.is_empty());
+    assert_eq!(s.players[0].hand.last().map(String::as_str), Some("BT_120"));
+    assert_eq!(s.players[1].board[0].health, 5);
+}
+
+// 第 3a 階段 G1：第 3a 卡池加上英雄技能，Emberstone 和 RosettaStone 逐步一致
+/// 打出手牌中的 id（手下放在 pos，指定 target）。
+fn play_id(
+    b: &mut Bridge,
+    s: &Snapshot,
+    player: usize,
+    id: &str,
+    pos: Option<usize>,
+    target: Option<Target>,
+) -> Snapshot {
+    let hand = hand_pos(s, player, id);
+    b.act(&Action::Play {
+        hand,
+        pos,
+        target,
+        choose_one: 0,
+    })
+    .unwrap_or_else(|e| panic!("打出 {id} 失敗：{e:?}"))
+}
+
+fn mage_vs(p1: &[&str], p2_class: &str, p2: &[&str]) -> GameSetup {
+    GameSetup {
+        p1: PlayerSetup {
+            class: "MAGE".into(),
+            deck: deck(p1),
+        },
+        p2: PlayerSetup {
+            class: p2_class.into(),
+            deck: deck(p2),
+        },
+        rng: RngMode::Record { seed: 7 },
+    }
+}
+
+// 第 3a 階段 C7（橋接程式，patch）：瘋狂的鍊金師對調受傷手下的目前生命；本回合的加成併入新數值
+#[test]
+fn stage3a_c7_alchemist_damaged_and_one_turn_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(&["CS2_182", "CORE_CS2_189", "CORE_EX1_059"], "WARRIOR", &[]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 7);
+    let s = play_id(&mut b, &s, 0, "CS2_182", Some(0), None); // 冰風雪人 4/5
+    end_until(&mut b, s, 9);
+    b.act(&Action::Power {
+        target: Some(target_minion(1, 0)),
+    })
+    .unwrap(); // 4/4
+    let s = b.snapshot().unwrap();
+    let s = play_id(
+        &mut b,
+        &s,
+        0,
+        "CORE_CS2_189",
+        Some(1),
+        Some(target_minion(1, 0)),
+    ); // 4/3
+    let s = play_id(
+        &mut b,
+        &s,
+        0,
+        "CORE_EX1_059",
+        Some(2),
+        Some(target_minion(1, 0)),
+    );
+    let y = &s.players[0].board[0];
+    assert_eq!((y.attack, y.health, y.max_health), (3, 4, 4));
+    // 本回合 +2 攻擊力（嚴厲的士官）併入對調後的數值，回合結束不再扣
+    let mut b = bridge();
+    let setup = mage_vs(&["CS2_182", "CORE_CS2_188", "CORE_EX1_059"], "WARRIOR", &[]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 7);
+    let s = play_id(&mut b, &s, 0, "CS2_182", Some(0), None);
+    let s = end_until(&mut b, s, 9);
+    let s = play_id(
+        &mut b,
+        &s,
+        0,
+        "CORE_CS2_188",
+        Some(1),
+        Some(target_minion(1, 0)),
+    ); // 6/5
+    let s = play_id(
+        &mut b,
+        &s,
+        0,
+        "CORE_EX1_059",
+        Some(2),
+        Some(target_minion(1, 0)),
+    );
+    let y = &s.players[0].board[0];
+    assert_eq!((y.attack, y.health), (5, 6));
+    let s = b.act(&Action::End).unwrap();
+    let y = &s.players[0].board[0];
+    assert_eq!((y.attack, y.health), (5, 6));
+}
+
+// 第 3a 階段 D4（橋接程式，patch）：哀嚎水氣只在「你」打出元素後觸發，自己打出時也不觸發
+#[test]
+fn stage3a_d4_wailing_vapor_friendly_only_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(&["WC_042"], "SHAMAN", &["CORE_UNG_928"]);
+    let s = b.new_game(&setup).unwrap();
+    let s = play_id(&mut b, &s, 0, "WC_042", Some(0), None);
+    assert_eq!(s.players[0].board[0].attack, 1);
+    let s = end_until(&mut b, s, 6);
+    let s = play_id(&mut b, &s, 1, "CORE_UNG_928", Some(0), None); // 對手打出焦油蠕行者（元素）
+    assert_eq!(s.players[1].board.len(), 1);
+    assert_eq!(s.players[0].board[0].attack, 1);
+}
+
+// 第 3a 階段 E2（橋接程式，patch）：踏板陷阱在對手的法術結算完才觸發；那時對手沒有手下就留在場上
+#[test]
+fn stage3a_e2_pressure_plate_after_spell_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(&["CS2_182", "CORE_CS2_029"], "HUNTER", &["ULD_152"]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 4);
+    let s = play_id(&mut b, &s, 1, "ULD_152", None, None);
+    assert_eq!(s.players[1].secrets, vec!["ULD_152".to_string()]);
+    let s = end_until(&mut b, s, 7);
+    let s = play_id(&mut b, &s, 0, "CS2_182", Some(0), None);
+    let s = end_until(&mut b, s, 9);
+    // 火球術打死自己唯一的手下：結算完沒有手下，踏板陷阱不觸發
+    let s = play_id(
+        &mut b,
+        &s,
+        0,
+        "CORE_CS2_029",
+        None,
+        Some(target_minion(1, 0)),
+    );
+    assert!(s.players[0].board.is_empty());
+    assert_eq!(s.players[1].secrets, vec!["ULD_152".to_string()]);
+}
+
+// 第 3a 階段 D2（橋接程式，patch）：焦油蠕行者在對手回合被沉默，攻擊力回到 1（不會變成 0）
+#[test]
+fn stage3a_d2_tar_creeper_silenced_on_opponent_turn_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(&["CORE_UNG_928"], "WARRIOR", &["CORE_CS2_203"]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 5);
+    play_id(&mut b, &s, 0, "CORE_UNG_928", Some(0), None);
+    let s = b.act(&Action::End).unwrap();
+    assert_eq!(s.players[0].board[0].attack, 3);
+    let s = play_id(
+        &mut b,
+        &s,
+        1,
+        "CORE_CS2_203",
+        Some(0),
+        Some(target_minion(1, 0)),
+    );
+    assert_eq!(s.players[0].board[0].attack, 1);
+}
+
+// 第 3a 階段 G1：第 3a 卡池加上英雄技能，Emberstone 和 RosettaStone 逐步一致
+// 第 3a 階段 B5（橋接程式，patch）：霧帆掠劫者沒有武器時打出不用選目標，有武器時才要選
+#[test]
+fn stage3a_b5_fogsail_target_needs_weapon_on_bridge() {
+    let mut b = bridge();
+    let setup = GameSetup {
+        p1: PlayerSetup {
+            class: "ROGUE".into(),
+            deck: deck(&["CS3_022"]),
+        },
+        p2: PlayerSetup {
+            class: "WARRIOR".into(),
+            deck: p2_deck(),
+        },
+        rng: RngMode::Record { seed: 7 },
+    };
+    let fogsail_targets = |b: &mut Bridge, s: &Snapshot| -> Vec<Option<Target>> {
+        let i = hand_pos(s, 0, "CS3_022");
+        b.options()
+            .unwrap()
+            .into_iter()
+            .filter_map(|a| match a {
+                Action::Play { hand, target, .. } if hand == i => Some(target),
+                _ => None,
+            })
+            .collect()
+    };
+    let s = script_first_player(&mut b, &setup, &[(7, Action::Power { target: None })]);
+    let targets = fogsail_targets(&mut b, &s);
+    assert!(
+        targets.contains(&Some(Target::Hero { player: 2 })),
+        "{targets:?}"
+    );
+    // 沒有武器（牧師）
+    let mut b = bridge();
+    let priest = GameSetup {
+        p1: PlayerSetup {
+            class: "PRIEST".into(),
+            deck: deck(&["CS3_022"]),
+        },
+        ..setup.clone()
+    };
+    let s = b.new_game(&priest).unwrap();
+    let s = end_until(&mut b, s, 5);
+    let targets = fogsail_targets(&mut b, &s);
+    assert!(
+        !targets.is_empty() && targets.iter().all(Option::is_none),
+        "{targets:?}"
+    );
+}
+
+// 第 3a 階段 B4（橋接程式，patch）：惡魔斬隙者沒有手下可以摧毀時照樣能打出，戰吼不發動
+#[test]
+fn stage3a_b4_riftcleaver_without_targets_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(&["ULD_165"], "WARRIOR", &[]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 11);
+    let s = play_id(&mut b, &s, 0, "ULD_165", Some(0), None);
+    assert_eq!(s.players[0].board.len(), 1);
+    assert_eq!(s.players[0].hero.health, 30);
+}
+
+// 第 3a 階段 A1（橋接程式，patch）：爆炸符文加上法術傷害，溢出照總量算（實測 R10）
+#[test]
+fn stage3a_a1_explosive_runes_spell_damage_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(&["CORE_EX1_012", "CORE_LOOT_101"], "WARRIOR", &["CS2_182"]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 5);
+    let s = play_id(&mut b, &s, 0, "CORE_EX1_012", Some(0), None);
+    let s = end_until(&mut b, s, 7);
+    let s = play_id(&mut b, &s, 0, "CORE_LOOT_101", None, None);
+    let s = end_until(&mut b, s, 8);
+    let s = play_id(&mut b, &s, 1, "CS2_182", Some(0), None); // 冰風雪人 4/5 吃 7 點，溢出 2 點
+    assert!(s.players[1].board.is_empty());
+    assert_eq!(s.players[1].hero.health, 28);
+    // 7 生命的手下正好被打死，沒有溢出（RosettaStone 原本用 6 − 生命 判斷）
+    let mut b = bridge();
+    let setup = mage_vs(&["CORE_EX1_012", "CORE_LOOT_101"], "WARRIOR", &["CS2_186"]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 5);
+    let s = play_id(&mut b, &s, 0, "CORE_EX1_012", Some(0), None);
+    let s = end_until(&mut b, s, 7);
+    let s = play_id(&mut b, &s, 0, "CORE_LOOT_101", None, None);
+    let s = end_until(&mut b, s, 14);
+    let s = play_id(&mut b, &s, 1, "CS2_186", Some(0), None); // 戰爭傀儡 7/7
+    assert!(s.players[1].board.is_empty());
+    assert_eq!(s.players[1].hero.health, 30);
+}
+
+// 第 3a 階段 H8（橋接程式，patch）：上場時對手沒有手下的衝刺手下被凍結，到下一個自己的回合結束才解凍；
+// 對手有手下時本回合結束就解凍（實測 R11）
+#[test]
+fn stage3a_h8_rush_minion_frozen_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(&["CS3_038", "CS2_031"], "WARRIOR", &[]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 5);
+    let s = play_id(&mut b, &s, 0, "CS3_038", Some(0), None); // 紅鰓刃顎魚人 3/1 衝刺
+    let s = play_id(&mut b, &s, 0, "CS2_031", None, Some(target_minion(1, 0))); // 冰槍術凍結它
+    assert!(s.players[0].board[0].frozen);
+    let s = b.act(&Action::End).unwrap();
+    assert!(s.players[0].board[0].frozen);
+    let s = end_until(&mut b, s, 7);
+    assert!(s.players[0].board[0].frozen);
+    let s = b.act(&Action::End).unwrap();
+    assert!(!s.players[0].board[0].frozen);
+    // 對手有手下
+    let mut b = bridge();
+    let setup = mage_vs(&["CS3_038", "CS2_031"], "WARRIOR", &["CS2_182"]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 8);
+    let s = play_id(&mut b, &s, 1, "CS2_182", Some(0), None);
+    let s = end_until(&mut b, s, 9);
+    let s = play_id(&mut b, &s, 0, "CS3_038", Some(0), None);
+    let s = play_id(&mut b, &s, 0, "CS2_031", None, Some(target_minion(1, 0)));
+    assert!(s.players[0].board[0].frozen);
+    let s = b.act(&Action::End).unwrap();
+    assert!(!s.players[0].board[0].frozen);
+}
+
+// 第 3a 階段 C7（橋接程式，patch）：鍊金師對調激怒中的手下：對調後不再受傷，激怒的加成已併入、不再扣掉
+#[test]
+fn stage3a_c7_alchemist_enraged_minion_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(&["CORE_EX1_414", "CORE_EX1_059"], "WARRIOR", &[]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 15);
+    let s = play_id(&mut b, &s, 0, "CORE_EX1_414", Some(0), None); // 葛羅瑪許 4/9
+    end_until(&mut b, s, 17);
+    let s = b
+        .act(&Action::Power {
+            target: Some(target_minion(1, 0)),
+        })
+        .unwrap(); // 10/8
+    assert_eq!(s.players[0].board[0].attack, 10);
+    let s = play_id(
+        &mut b,
+        &s,
+        0,
+        "CORE_EX1_059",
+        Some(1),
+        Some(target_minion(1, 0)),
+    );
+    let g = &s.players[0].board[0];
+    assert_eq!((g.attack, g.health, g.max_health), (8, 10, 10));
+}
+
+// 第 2 階段 H1＋第 1 階段 C3（橋接程式，patch）：剛上場的衝刺手下被沉默後失去衝刺，當回合不能攻擊
+#[test]
+fn stage3a_silenced_rush_minion_cannot_attack_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(&["CS3_038", "CORE_CS2_203"], "WARRIOR", &["CS2_182"]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 8);
+    let s = play_id(&mut b, &s, 1, "CS2_182", Some(0), None);
+    let s = end_until(&mut b, s, 9);
+    let s = play_id(&mut b, &s, 0, "CS3_038", Some(0), None); // 紅鰓刃顎魚人 3/1 衝刺
+    let redgill_attacks = |b: &mut Bridge| {
+        b.options()
+            .unwrap()
+            .into_iter()
+            .filter(|a| {
+                matches!(
+                    a,
+                    Action::Attack {
+                        attacker: Target::Minion {
+                            player: 1,
+                            index: 0
+                        },
+                        ..
+                    }
+                )
+            })
+            .count()
+    };
+    assert_eq!(redgill_attacks(&mut b), 1);
+    play_id(
+        &mut b,
+        &s,
+        0,
+        "CORE_CS2_203",
+        Some(1),
+        Some(target_minion(1, 0)),
+    );
+    assert_eq!(redgill_attacks(&mut b), 0);
+}
+
+// 第 3a 階段 G1：第 3a 卡池加上英雄技能，Emberstone 和 RosettaStone 逐步一致
+#[test]
+fn stage3a_g1_pool() {
+    let out = run_difftest(&[
+        "run",
+        "--engine",
+        "emberstone",
+        "--pool",
+        "stage3a",
         "--powers",
         "--games",
         "3",

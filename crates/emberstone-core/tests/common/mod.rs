@@ -34,6 +34,7 @@ pub fn config(p1: Vec<&'static str>, p2: Vec<&'static str>) -> GameConfig {
         shuffle: false,
         rng: RngSource::Seed(1),
         effects: None,
+        discover_order: None,
     }
 }
 

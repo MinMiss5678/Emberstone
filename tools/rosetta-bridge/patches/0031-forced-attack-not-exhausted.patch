@@ -1,0 +1,24 @@
+diff --git a/Sources/Rosetta/PlayMode/Actions/Attack.cpp b/Sources/Rosetta/PlayMode/Actions/Attack.cpp
+--- a/Sources/Rosetta/PlayMode/Actions/Attack.cpp
++++ b/Sources/Rosetta/PlayMode/Actions/Attack.cpp
+@@ -178,12 +178,14 @@ void Attack(const Player* player, Character* source, Character* target,
+     const int val = source->GetNumAttacksThisTurn();
+     source->SetNumAttacksThisTurn(val + 1);
+ 
+-    // Check source is exhausted
+-    if ((source->GetNumAttacksThisTurn() >= 4 && source->HasMegaWindfury()) ||
+-        (source->GetNumAttacksThisTurn() >= 2 &&
+-         (!source->HasMegaWindfury() && source->HasWindfury())) ||
+-        (source->GetNumAttacksThisTurn() >= 1 &&
+-         (!source->HasWindfury() && !source->HasMegaWindfury())))
++    // Check source is exhausted (an attack forced by an effect, such as
++    // Illidari Inquisitor following the hero, does not use up its attack)
++    if (!skipPrePhase &&
++        ((source->GetNumAttacksThisTurn() >= 4 && source->HasMegaWindfury()) ||
++         (source->GetNumAttacksThisTurn() >= 2 &&
++          (!source->HasMegaWindfury() && source->HasWindfury())) ||
++         (source->GetNumAttacksThisTurn() >= 1 &&
++          (!source->HasWindfury() && !source->HasMegaWindfury()))))
+     {
+         source->SetExhausted(true);
+     }

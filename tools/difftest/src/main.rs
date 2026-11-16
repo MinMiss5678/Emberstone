@@ -455,11 +455,14 @@ fn cmd_run(args: &[String]) -> Result<bool, String> {
         (Some("stage2"), None) => {
             pool_file("stage2_pool.txt")?.with_fill(pool_file("keyword_pool.txt")?)
         }
+        (Some("stage3a"), None) => {
+            pool_file("stage3a_pool.txt")?.with_fill(pool_file("keyword_pool.txt")?)
+        }
         (None, Some("A")) => Pool::new(&rows, Batch::A),
         (None, Some("B")) => Pool::new(&rows, Batch::B),
         (p, b) => {
             return Err(format!(
-                "要指定 --batch A|B 或 --pool keywords|stage2 其中一個（收到 {p:?}、{b:?}）"
+                "要指定 --batch A|B 或 --pool keywords|stage2|stage3a 其中一個（收到 {p:?}、{b:?}）"
             ));
         }
     };
@@ -475,7 +478,7 @@ fn cmd_run(args: &[String]) -> Result<bool, String> {
         }
         let game_seed = seed.wrapping_mul(1_000_003).wrapping_add(g as u64);
         let outcome = if emberstone_engine {
-            play_emberstone(&mut bridge, &pool, game_seed, powers)?
+            play_emberstone(&mut bridge, &pool, &rows, game_seed, powers)?
         } else {
             play_game(&mut bridge, &pool, &rows, game_seed)?
         };
@@ -513,20 +516,51 @@ fn sorted_actions(v: &[Action]) -> Vec<String> {
 
 /// 在 RosettaStone 記錄一局（powers 為 false 時不使用英雄技能），再讓 Emberstone 用同樣的行動與亂數重播，
 /// 逐步比對合法行動與快照。
+/// 批次 A 中 RosettaStone 用原版卡號實作的核心卡（batches.tsv 的 rosetta_id），RosettaStone 那邊用原版卡號，
+/// 快照再換回我們的卡號比對。
 fn play_emberstone(
     bridge: &mut Bridge,
     pool: &Pool,
+    rows: &[Row],
     seed: u64,
     powers: bool,
 ) -> Result<Outcome, String> {
-    let plan = plan(pool, &HashMap::new(), seed)?;
-    let rec = match record(bridge, &plan, !powers)? {
+    let renamed = || {
+        rows.iter().filter(|r| r.batch == Batch::A).filter_map(|r| {
+            r.rosetta_id
+                .as_deref()
+                .filter(|rid| *rid != r.id)
+                .map(|rid| (r.id.as_str(), rid))
+        })
+    };
+    let to_rosetta: HashMap<&str, &str> = renamed().collect();
+    let back: HashMap<String, String> = renamed()
+        .map(|(id, rid)| (rid.to_string(), id.to_string()))
+        .collect();
+    emberstone::set_rosetta_ids(
+        &renamed()
+            .map(|(id, rid)| (id.to_string(), rid.to_string()))
+            .collect(),
+    );
+    let plan = plan(pool, &to_rosetta, seed)?;
+    let mut rec = match record(bridge, &plan, !powers)? {
         Ok(r) => r,
         Err(e) => return Ok(Outcome::Error(e)),
     };
+    for s in &mut rec.snapshots {
+        s.rename_cards(&back);
+    }
+    let ours = |p: &PlayerSetup| PlayerSetup {
+        class: p.class.clone(),
+        deck: p
+            .deck
+            .iter()
+            .map(|id| back.get(id).cloned().unwrap_or_else(|| id.clone()))
+            .collect(),
+    };
     let setup = GameSetup {
-        p1: plan.p1.clone(),
-        p2: plan.p2.clone(),
+        p1: ours(&plan.p1),
+        p2: ours(&plan.p2),
         rng: RngMode::Replay {
             events: rec.events.clone(),
         },

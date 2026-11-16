@@ -64,6 +64,8 @@ pub enum Aura {
     Adjacent { attack: i32 },
     /// 自己受傷時。
     WhileDamaged { attack: i32 },
+    /// 在對手的回合時（自己）。
+    OpponentTurn { attack: i32 },
 }
 
 /// 目標條件。
@@ -79,6 +81,12 @@ pub enum TargetReq {
     EnemyMinion,
     FriendlyCharacter,
     EnemyCharacter,
+    /// 未受傷的手下（背刺）。
+    UndamagedMinion,
+    /// 受傷的敵方手下（斬殺）。
+    DamagedEnemyMinion,
+    /// 有裝備武器時才需要目標的任一角色（霧帆掠劫者）。
+    CharacterIfWeapon,
 }
 
 /// 能不能打出／使用的額外條件。
@@ -87,6 +95,8 @@ pub enum Usable {
     Always,
     /// 戰場還有空位（召喚類英雄技能）。
     BoardSlot,
+    /// 有裝備武器。
+    WeaponEquipped,
 }
 
 /// 效果作用的對象。
@@ -102,6 +112,16 @@ pub enum Sel {
     Adjacent,
     /// 自己的全部手下。
     FriendlyMinions,
+    /// 自己的其他手下（race 有值時只限該種族）。
+    OtherFriendlyMinions {
+        race: Option<&'static str>,
+    },
+    /// 對手的全部手下。
+    EnemyMinions,
+    /// 雙方的全部手下（自己的在前）。
+    AllMinions,
+    /// 雙方攻擊力至少 n 的手下。
+    MinionsWithAttackAtLeast(i32),
     /// 全部角色：自己的手下、自己的英雄、對手的手下、對手的英雄（同 RosettaStone 的順序）。
     AllCharacters,
     /// 全部敵人：對手的手下、對手的英雄。
@@ -113,6 +133,10 @@ pub enum Sel {
 pub enum When {
     /// 你召喚（其他）手下時；race 有值時只限該種族。
     FriendlySummon { race: Option<&'static str> },
+    /// 你打出（其他）手下後（戰吼結算後）；race 有值時只限該種族。
+    AfterFriendlyPlay { race: Option<&'static str> },
+    /// 你的英雄攻擊敵人後（目標還在場上時，目標是被攻擊者）。
+    AfterOwnHeroAttacks,
     /// 任一手下受到傷害時（每隻受傷的手下觸發一次）。
     MinionDamaged,
     /// 你的回合結束時。
@@ -121,8 +145,12 @@ pub enum When {
     OwnHeroAttacked,
     /// 秘密：敵方手下攻擊時（目標是攻擊者）。
     EnemyMinionAttacks,
+    /// 秘密：你的手下被攻擊時（目標是攻擊者）。
+    FriendlyMinionAttacked,
     /// 秘密：對手施放法術時（反制）。
     OpponentCastsSpell,
+    /// 秘密：對手施放法術後（法術結算完）。
+    AfterOpponentCastsSpell,
     /// 秘密：對手打出手下後（目標是那隻手下）。
     AfterOpponentPlaysMinion,
 }
@@ -169,6 +197,32 @@ pub enum Effect {
     DiscoverFromDeck,
     /// 造成 n 次 1 點傷害，每次從「其他角色」隨機挑一個（抽法同 RosettaStone）。
     RandomSplitDamage(i32),
+    /// 造成 n 次 1 點傷害，每次從還活著的敵方手下隨機挑一個（抽法同 RosettaStone）。
+    RandomSplitEnemyMinions(i32),
+    /// 凍結。
+    Freeze(Sel),
+    /// 手牌沒有牌時才執行。
+    IfHandEmpty(&'static Effect),
+    /// 打出時選的目標還活著（生命 > 0）才執行。
+    IfTargetSurvived(&'static Effect),
+    /// 抽一張牌，抽到的牌費用減少 n。
+    DrawReduceCost(i32),
+    /// 從清單隨機召喚一隻（抽法同 RosettaStone：Int(0, n - 1)）。
+    SummonRandom(&'static [&'static str]),
+    /// 生命上限與目前生命設為 n（之後再套用被動加成）。
+    SetHealth { to: Sel, value: i32 },
+    /// 對調目前攻擊力與目前生命（被動加成併入後再套用一次）。
+    SwapAttackHealth(Sel),
+    /// 放一張卡到自己的手牌（手牌滿了就沒有）。
+    AddToHand(&'static str),
+    /// 自己的武器永久 +n 攻擊力。
+    WeaponAttack(i32),
+    /// 消滅對手一隻隨機手下（抽法同 RosettaStone：Int(0, n - 1)）。
+    DestroyRandomEnemyMinion,
+    /// 對手一隻隨機手下回到對手手牌（抽法同 RosettaStone：Int(0, n - 1)；手牌滿了就消滅）。
+    ReturnRandomEnemyMinion,
+    /// 效果來源（手下）攻擊目標：不檢查能不能攻擊、不算攻擊次數。
+    AttackTarget,
     /// 沉默。
     Silence(Sel),
     /// 回到擁有者的手牌，費用 +cost（手牌滿了就消滅）。
@@ -185,7 +239,7 @@ impl Effect {
     /// 效果裡有召喚手下（二選一的召喚選項在戰場已滿時不能選）。
     pub fn summons(&self) -> bool {
         match self {
-            Effect::Summon { .. } => true,
+            Effect::Summon { .. } | Effect::SummonRandom(_) => true,
             Effect::Seq(effects) => effects.iter().any(Effect::summons),
             _ => false,
         }

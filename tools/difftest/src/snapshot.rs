@@ -68,6 +68,25 @@ pub struct Snapshot {
     pub players: [PlayerState; 2],
 }
 
+impl Snapshot {
+    /// 把卡號照 map 換掉（手牌、戰場、秘密、武器）；不在 map 裡的不變。
+    pub fn rename_cards(&mut self, map: &std::collections::HashMap<String, String>) {
+        let rename = |id: &mut String| {
+            if let Some(new) = map.get(id.as_str()) {
+                id.clone_from(new);
+            }
+        };
+        for p in &mut self.players {
+            p.hand.iter_mut().for_each(rename);
+            p.secrets.iter_mut().for_each(rename);
+            p.board.iter_mut().for_each(|m| rename(&mut m.card));
+            if let Some(w) = &mut p.hero.weapon {
+                rename(&mut w.card);
+            }
+        }
+    }
+}
+
 /// 第一個不同的步數與不同的欄位。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Difference {

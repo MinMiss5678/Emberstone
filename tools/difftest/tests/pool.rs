@@ -83,3 +83,96 @@ fn stage2_g2_committed_example_pool() {
         assert!(emberstone_cards::lookup(id).is_some(), "{id} 沒有實作效果");
     }
 }
+
+/// 第 3a 階段的 58 張卡（docs/第3a階段-case表.md）。
+const STAGE3A: [&str; 58] = [
+    "CORE_AT_037",
+    "CORE_AT_055",
+    "CORE_AT_064",
+    "CORE_BAR_311",
+    "CORE_BAR_801",
+    "CORE_BAR_812",
+    "CORE_BRM_013",
+    "CORE_BT_035",
+    "CORE_CS2_023",
+    "CORE_CS2_028",
+    "CORE_CS2_032",
+    "CORE_CS2_053",
+    "CORE_CS2_072",
+    "CORE_CS2_074",
+    "CORE_CS2_108",
+    "CORE_EX1_169",
+    "CORE_EX1_197",
+    "CORE_EX1_238",
+    "CORE_EX1_278",
+    "CORE_EX1_391",
+    "CORE_EX1_619",
+    "CORE_ICC_055",
+    "CORE_NEW1_031",
+    "CORE_OG_047",
+    "CORE_SW_088",
+    "CORE_SW_108",
+    "CORE_TRL_307",
+    "CORE_TSC_650",
+    "CORE_ULD_152",
+    "CORE_BT_120",
+    "CORE_BT_701",
+    "CORE_CS2_179",
+    "CORE_CS2_042",
+    "CORE_EX1_010",
+    "CORE_EX1_011",
+    "CORE_EX1_012",
+    "CORE_EX1_028",
+    "CORE_EX1_043",
+    "CORE_EX1_059",
+    "CORE_EX1_103",
+    "CORE_EX1_414",
+    "CORE_EX1_507",
+    "CORE_GIL_622",
+    "CORE_GVG_085",
+    "CORE_ICC_038",
+    "CORE_NEW1_018",
+    "CORE_NEW1_027",
+    "CORE_ONY_018",
+    "CORE_ULD_165",
+    "CORE_ULD_191",
+    "CORE_ULD_271",
+    "CORE_ULD_280",
+    "CORE_UNG_928",
+    "CORE_WC_042",
+    "CS3_007",
+    "CS3_020",
+    "CS3_022",
+    "CS3_038",
+];
+
+// 第 3a 階段 G1：卡池 = 第 2 階段範例卡池 + 第 3a 階段的 58 張，都是可收藏的卡；
+// 有敘述（不只關鍵字）的卡都要有實作效果
+#[test]
+fn stage3a_g1_committed_pool() {
+    let read = |name: &str| {
+        let path = format!("{}/../../data/{name}", env!("CARGO_MANIFEST_DIR"));
+        parse_pool(&std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("讀不到 {path}")))
+    };
+    let ids: BTreeSet<String> = read("stage3a_pool.txt").into_iter().collect();
+    let mut expected: BTreeSet<String> = read("stage2_pool.txt").into_iter().collect();
+    expected.extend(STAGE3A.iter().map(|s| s.to_string()));
+    assert_eq!(ids, expected);
+    let vanilla = [
+        "CORE_BT_701",
+        "CORE_CS2_179",
+        "CORE_EX1_010",
+        "CORE_EX1_028",
+        "CORE_GVG_085",
+        "CORE_ICC_038",
+        "CS3_007",
+        "CS3_038",
+    ];
+    for id in &ids {
+        let c = card_by_id(id).unwrap_or_else(|| panic!("卡表沒有 {id}"));
+        assert!(c.collectible, "{id} 不是可收藏的卡");
+        if !vanilla.contains(&id.as_str()) {
+            assert!(emberstone_cards::lookup(id).is_some(), "{id} 沒有實作效果");
+        }
+    }
+}

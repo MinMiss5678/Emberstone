@@ -28,6 +28,37 @@ fn snapshot(p1_hand: &[&str], p2_health: i32) -> Snapshot {
 }
 
 // C1：兩邊快照完全相同 → 一致
+// 第 3a 階段 G1：RosettaStone 用原版卡號實作的核心卡（batches.tsv 的 rosetta_id），快照的卡號換回我們的卡號再比對
+#[test]
+fn stage3a_g1_rename_rosetta_card_ids() {
+    let mut s = snapshot(&["BT_120", "CS2_182"], 30);
+    s.players[0].board[0].card = "WC_042".to_string();
+    s.players[1].secrets.push("ULD_152".to_string());
+    s.players[1].hero.weapon = Some(emberstone_difftest::snapshot::Weapon {
+        card: "BT_120".to_string(),
+        attack: 1,
+        durability: 2,
+    });
+    let map: std::collections::HashMap<String, String> = [
+        ("BT_120", "CORE_BT_120"),
+        ("WC_042", "CORE_WC_042"),
+        ("ULD_152", "CORE_ULD_152"),
+    ]
+    .iter()
+    .map(|(a, b)| (a.to_string(), b.to_string()))
+    .collect();
+    s.rename_cards(&map);
+    assert_eq!(s.players[0].hand, vec!["CORE_BT_120", "CS2_182"]);
+    assert_eq!(s.players[0].board[0].card, "CORE_WC_042");
+    assert_eq!(s.players[1].secrets, vec!["CORE_ULD_152"]);
+    assert_eq!(
+        s.players[1].hero.weapon.as_ref().unwrap().card,
+        "CORE_BT_120"
+    );
+    assert_eq!(s.players[1].hand, vec!["GAME_005"]);
+}
+
+// C1：兩邊快照完全相同 → 一致
 #[test]
 fn c1_identical_sequences_have_no_difference() {
     let a = vec![snapshot(&["CS2_182"], 30), snapshot(&[], 28)];

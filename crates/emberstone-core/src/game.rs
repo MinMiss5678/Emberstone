@@ -113,7 +113,11 @@ pub struct Entity {
     pub spell_damage: i32,
     /// 本回合剛上場（沒有衝鋒就不能攻擊；有衝刺只能攻擊手下）。
     pub summoning_sick: bool,
+    /// 上場當下對手場上有手下（剛上場的衝刺手下本回合能攻擊；凍結時決定何時解凍，第 3a 階段 H8）。
+    pub rush_had_targets: bool,
     pub attacks_this_turn: i32,
+    /// 本回合效果要求的攻擊次數（伊利達瑞審判官、戰槌挑戰者）：算進 attacks_this_turn，但不佔攻擊次數。
+    pub forced_attacks: i32,
     /// 「本回合」加的攻擊力，回合結束時扣回。
     pub temp_attack: i32,
     /// 被致命劇毒等效果消滅，等死亡階段移出戰場。
@@ -154,7 +158,9 @@ impl Entity {
             frozen: false,
             spell_damage: card.spell_damage,
             summoning_sick: false,
+            rush_had_targets: false,
             attacks_this_turn: 0,
+            forced_attacks: 0,
             temp_attack: 0,
             destroyed: false,
             play_order: 0,
@@ -171,6 +177,11 @@ impl Entity {
         } else {
             self.def.map(|d| d.0)
         }
+    }
+
+    /// 本回合自己用掉的攻擊次數（不含效果要求的攻擊）。
+    fn used_attacks(&self) -> i32 {
+        self.attacks_this_turn - self.forced_attacks
     }
 
     /// 目前費用（不低於 0）。
@@ -222,6 +233,8 @@ pub struct GameConfig {
     pub rng: RngSource,
     /// 卡片效果（由 emberstone-cards 提供）；None 表示只有數值和關鍵字。
     pub effects: Option<EffectLookup>,
+    /// 從牌庫發現時的排序鍵；None 為 dbfId。差分測試用來讓 RosettaStone 以原版卡號實作的卡照原版 dbfId 排序。
+    pub discover_order: Option<fn(&'static Card) -> u32>,
 }
 
 /// 卡片效果的查詢函式；比較對局時不比它（同一局一定相同）。
@@ -240,6 +253,22 @@ impl std::fmt::Debug for Effects {
     }
 }
 
+/// 從牌庫發現時的排序鍵；比較對局時不比它（同一局一定相同）。
+#[derive(Clone, Copy)]
+struct DiscoverOrder(Option<fn(&'static Card) -> u32>);
+
+impl PartialEq for DiscoverOrder {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl std::fmt::Debug for DiscoverOrder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("DiscoverOrder")
+    }
+}
+
 /// 一局對戰。整份可複製。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Game {
@@ -252,6 +281,7 @@ pub struct Game {
     /// 效果執行中亂數不同步（之後的行動都拒絕）。
     desync: Option<Desync>,
     effects: Effects,
+    discover_order: DiscoverOrder,
     /// 下一個上場的順序編號。
     next_order: u32,
     /// 死亡階段中，已移出戰場、死亡之聲還沒結算完的手下：(手下, 擁有者, 召喚位置)。
@@ -318,6 +348,7 @@ impl Game {
             rng,
             desync: None,
             effects,
+            discover_order: DiscoverOrder(config.discover_order),
             next_order: 1,
             dr_markers: Vec::new(),
             lingering: Vec::new(),
@@ -431,6 +462,7 @@ impl Game {
 
     /// 手下上場：放進戰場並記下上場順序。
     fn enter_board(&mut self, player: usize, id: EntityId, pos: usize) {
+        self.entities[id].rush_had_targets = !self.players[1 - player].board.is_empty();
         self.players[player].board.insert(pos, id);
         self.entities[id].play_order = self.next_order;
         self.next_order += 1;
@@ -448,6 +480,7 @@ impl Game {
         e.play_order = play_order;
         // 視同剛上場
         e.summoning_sick = true;
+        e.rush_had_targets = !self.players[1 - owner].board.is_empty();
         self.entities[id] = e;
         self.refresh_auras();
     }
@@ -548,6 +581,7 @@ impl Game {
             Aura::WhileDamaged { attack } if s == m && target.health < target.max_health => {
                 (attack, 0)
             }
+            Aura::OpponentTurn { attack } if s == m && self.current != target.owner => (attack, 0),
             _ => (0, 0),
         }
     }
@@ -581,6 +615,27 @@ impl Game {
 
     /// 「你召喚手下時」的觸發（依上場順序）。
     fn fire_summon(&mut self, summoned: EntityId) {
+        self.fire_friendly_minion(summoned, |w| match w {
+            When::FriendlySummon { race } => Some(race),
+            _ => None,
+        });
+    }
+
+    /// 「你打出手下後」的觸發（依上場順序）。
+    fn fire_after_play(&mut self, played: EntityId) {
+        self.fire_friendly_minion(played, |w| match w {
+            When::AfterFriendlyPlay { race } => Some(race),
+            _ => None,
+        });
+    }
+
+    /// 友方手下 minion 引起的觸發（召喚、打出）：kind 從觸發時機取出種族條件，不是這類觸發回傳 None。
+    fn fire_friendly_minion(
+        &mut self,
+        minion: EntityId,
+        kind: fn(When) -> Option<Option<&'static str>>,
+    ) {
+        let summoned = minion;
         let owner = self.entities[summoned].owner;
         let races = self.entities[summoned].card.races;
         let mut holders: Vec<EntityId> = self.players[owner]
@@ -595,7 +650,7 @@ impl Game {
                 continue;
             };
             for t in def.triggers {
-                let When::FriendlySummon { race } = t.when else {
+                let Some(race) = kind(t.when) else {
                     continue;
                 };
                 if race.is_none_or(|r| races.contains(&r)) {
@@ -610,6 +665,14 @@ impl Game {
                 }
             }
         }
+    }
+
+    /// 角色還在場上而且活著（生命 > 0、沒有被消滅）。
+    pub fn in_play(&self, id: EntityId) -> bool {
+        let e = &self.entities[id];
+        e.health > 0
+            && !e.destroyed
+            && (self.players[e.owner].board.contains(&id) || self.players[e.owner].hero == id)
     }
 
     /// 效果用的亂數：閉區間 [lo, hi]。不同步時記下並回傳 lo（這個行動結束後回報）。
@@ -759,6 +822,7 @@ impl Game {
         match entity.def().map_or(Usable::Always, |d| d.usable) {
             Usable::Always => true,
             Usable::BoardSlot => self.players[entity.owner].board.len() < BOARD_LIMIT,
+            Usable::WeaponEquipped => self.players[entity.owner].weapon.is_some(),
         }
     }
 
@@ -778,6 +842,8 @@ impl Game {
 
     /// 符合目標條件的角色（player 為使用者）。對手的潛行手下不能選。
     fn targets(&self, req: TargetReq, player: usize) -> Vec<Target> {
+        // 手下的受傷條件：None 不限、Some(true) 只限受傷、Some(false) 只限未受傷
+        let mut need_damaged: Option<bool> = None;
         let (heroes, minions, friendly, enemy) = match req {
             TargetReq::None => return Vec::new(),
             TargetReq::Character => (true, true, true, true),
@@ -786,6 +852,24 @@ impl Game {
             TargetReq::EnemyMinion => (false, true, false, true),
             TargetReq::FriendlyCharacter => (true, true, true, false),
             TargetReq::EnemyCharacter => (true, true, false, true),
+            TargetReq::UndamagedMinion => {
+                need_damaged = Some(false);
+                (false, true, true, true)
+            }
+            TargetReq::DamagedEnemyMinion => {
+                need_damaged = Some(true);
+                (false, true, false, true)
+            }
+            TargetReq::CharacterIfWeapon => {
+                if self.players[player].weapon.is_none() {
+                    return Vec::new();
+                }
+                (true, true, true, true)
+            }
+        };
+        let minion_ok = |m: EntityId| {
+            let e = &self.entities[m];
+            need_damaged.is_none_or(|d| d == (e.health < e.max_health))
         };
         let mut out = Vec::new();
         for side in [player, 1 - player] {
@@ -798,7 +882,7 @@ impl Game {
             }
             if minions {
                 for (index, &m) in self.players[side].board.iter().enumerate() {
-                    if mine || !self.entities[m].stealth {
+                    if (mine || !self.entities[m].stealth) && minion_ok(m) {
                         out.push(Target::Minion {
                             player: side,
                             index,
@@ -902,7 +986,7 @@ impl Game {
                 (e.attack, e.windfury)
             }
         };
-        attack > 0 && e.attacks_this_turn < Self::max_attacks(windfury)
+        attack > 0 && e.used_attacks() < Self::max_attacks(windfury)
     }
 
     /// 每回合可攻擊次數。
@@ -944,7 +1028,9 @@ impl Game {
         let e = self.players[p].hand.remove(hand);
         let card = self.entities[e].card;
         self.players[p].mana -= self.entities[e].cost();
-        self.players[p].overload_owed += card.overload;
+        if card.card_type != CardType::Spell {
+            self.players[p].overload_owed += card.overload;
+        }
         let ctx = Ctx {
             source: e,
             owner: p,
@@ -970,8 +1056,13 @@ impl Game {
                 self.death_phase();
                 return;
             }
+            // 被反制的法術不套用超載（第 3a 階段 H3）
+            self.players[p].overload_owed += card.overload;
             if card.keywords.contains(&Keyword::Secret) {
                 self.players[p].secrets.push(e);
+                self.death_phase();
+                // 打出秘密也是施放法術：對手「施放法術後」的秘密照樣觸發（第 3a 階段 E2）
+                self.reveal_secrets(1 - p, &[When::AfterOpponentCastsSpell], e);
                 self.death_phase();
                 return;
             }
@@ -988,7 +1079,13 @@ impl Game {
             // 英雄在這個死亡階段死亡時流程照樣繼續，最後的死亡階段才定勝負（case C7）
             self.death_phase();
             self.fire_summon(e);
+            self.fire_after_play(e);
             self.reveal_secrets(1 - p, &[When::AfterOpponentPlaysMinion], e);
+        }
+        if card.card_type == CardType::Spell {
+            // 法術結算完、死亡階段之後，對手「施放法術後」的秘密（第 3a 階段 E2）
+            self.death_phase();
+            self.reveal_secrets(1 - p, &[When::AfterOpponentCastsSpell], e);
         }
         self.death_phase();
     }
@@ -1013,7 +1110,10 @@ impl Game {
                     && self.entities[target].card.card_type != CardType::Spell
             };
             match matches {
-                Some(trigger) if !gone || trigger.when == When::OwnHeroAttacked => {
+                Some(trigger)
+                    if (!gone || trigger.when == When::OwnHeroAttacked)
+                        && self.secret_can_fire(&trigger.effect, player) =>
+                {
                     self.players[player].secrets.remove(i);
                     let ctx = Ctx {
                         source: s,
@@ -1031,15 +1131,42 @@ impl Game {
         self.refresh_auras();
     }
 
+    /// 秘密的效果能不能發揮；不能時秘密不觸發、留在場上（Wiki Secret；第 3a 階段 E1、E2）。
+    fn secret_can_fire(&self, effect: &Effect, owner: usize) -> bool {
+        if effect.summons() && self.players[owner].board.len() >= BOARD_LIMIT {
+            return false;
+        }
+        if matches!(effect, Effect::DestroyRandomEnemyMinion) {
+            return !self.living_minions(1 - owner).is_empty();
+        }
+        true
+    }
+
+    /// 一方戰場上還活著（生命 > 0、沒有被消滅）的手下。
+    fn living_minions(&self, player: usize) -> Vec<EntityId> {
+        self.players[player]
+            .board
+            .iter()
+            .copied()
+            .filter(|&m| self.entities[m].health > 0 && !self.entities[m].destroyed)
+            .collect()
+    }
+
     /// 沉默：效果、觸發、被動加成、死亡之聲失效；數值回到卡牌原始值（加上別人給的被動加成）；
-    /// 目前生命只在超過新上限時才降；解除凍結、拿掉關鍵字。
+    /// 生命上限變高時目前生命增加同樣的量，變低時只在超過新上限時才降；解除凍結、拿掉關鍵字。
     fn silence(&mut self, id: EntityId) {
         let e = &mut self.entities[id];
         e.silenced = true;
         e.attack = e.card.attack.unwrap_or(0) + e.aura_attack;
         e.temp_attack = 0;
-        e.max_health = e.card.health.unwrap_or(0) + e.aura_health;
-        e.health = e.health.min(e.max_health);
+        let max = e.card.health.unwrap_or(0) + e.aura_health;
+        if max > e.max_health {
+            // 上限變高：目前生命增加同樣的量（第 3a 階段 H2）
+            e.health += max - e.max_health;
+        } else {
+            e.health = e.health.min(max);
+        }
+        e.max_health = max;
         e.taunt = false;
         e.divine_shield = false;
         e.stealth = false;
@@ -1116,8 +1243,48 @@ impl Game {
     fn attack(&mut self, attacker: Target, target: Target) {
         let a = self.resolve(attacker).expect("已檢查攻擊者");
         let t = self.resolve(target).expect("已檢查目標");
-        let p = self.current;
         let hero_attacking = matches!(attacker, Target::Hero { .. });
+        self.attack_entity(a, t, hero_attacking, true);
+        if hero_attacking {
+            self.fire_after_hero_attack(t);
+        }
+    }
+
+    /// 效果要求的攻擊（伊利達瑞審判官、戰槌挑戰者）：不檢查能不能攻擊、不算攻擊次數，照常觸發秘密。
+    pub fn forced_attack(&mut self, attacker: EntityId, target: EntityId) {
+        if self.in_play(attacker) && self.in_play(target) && self.outcome.is_none() {
+            self.attack_entity(attacker, target, false, false);
+        }
+    }
+
+    /// 「你的英雄攻擊敵人後」的觸發（依上場順序；目標已不在場上就不觸發）。
+    fn fire_after_hero_attack(&mut self, target: EntityId) {
+        let p = self.current;
+        let mut holders = self.players[p].board.clone();
+        holders.sort_by_key(|&m| self.entities[m].play_order);
+        for m in holders {
+            let Some(def) = self.entities[m].def() else {
+                continue;
+            };
+            for t in def.triggers {
+                if t.when == When::AfterOwnHeroAttacks && self.in_play(m) && self.in_play(target) {
+                    let ctx = Ctx {
+                        source: m,
+                        owner: p,
+                        target: Some(target),
+                        spell: false,
+                        deathrattle: false,
+                    };
+                    self.run(&t.effect, &ctx);
+                }
+            }
+        }
+    }
+
+    /// 攻擊：a 攻擊 t（hero_attacking 時 a 是英雄、帶武器）；count 為 false 時不算攻擊次數。
+    fn attack_entity(&mut self, a: EntityId, t: EntityId, hero_attacking: bool, count: bool) {
+        let p = self.entities[a].owner;
+        let target_is_hero = self.players[1 - p].hero == t;
         let weapon = if hero_attacking {
             self.players[p].weapon
         } else {
@@ -1129,11 +1296,11 @@ impl Game {
         // 攻擊宣告：防守方的秘密依打出順序觸發；攻擊者或目標因此離場就取消攻擊
         let defender = 1 - p;
         let secrets_before = self.players[defender].secrets.len();
-        let whens: &[When] = match (matches!(target, Target::Hero { .. }), hero_attacking) {
+        let whens: &[When] = match (target_is_hero, hero_attacking) {
             (true, false) => &[When::OwnHeroAttacked, When::EnemyMinionAttacks],
             (true, true) => &[When::OwnHeroAttacked],
-            (false, false) => &[When::EnemyMinionAttacks],
-            (false, true) => &[],
+            (false, false) => &[When::EnemyMinionAttacks, When::FriendlyMinionAttacked],
+            (false, true) => &[When::FriendlyMinionAttacked],
         };
         self.reveal_secrets(defender, whens, a);
         if self.players[defender].secrets.len() != secrets_before {
@@ -1153,9 +1320,10 @@ impl Game {
         } else {
             self.entities[a].attack
         };
-        let target_attack = match target {
-            Target::Minion { .. } => self.entities[t].attack,
-            Target::Hero { .. } => 0,
+        let target_attack = if target_is_hero {
+            0
+        } else {
+            self.entities[t].attack
         };
         let a_lifesteal = has(self, |e| e.lifesteal);
         let a_poisonous = has(self, |e| e.poisonous);
@@ -1167,7 +1335,7 @@ impl Game {
         if dealt > 0 && !hero_attacking && self.entities[a].freeze {
             self.entities[t].frozen = true;
         }
-        if dealt > 0 && a_poisonous && matches!(target, Target::Minion { .. }) {
+        if dealt > 0 && a_poisonous && !target_is_hero {
             self.entities[t].destroyed = true;
         }
 
@@ -1190,6 +1358,9 @@ impl Game {
         let e = &mut self.entities[a];
         e.stealth = false;
         e.attacks_this_turn += 1;
+        if !count {
+            e.forced_attacks += 1;
+        }
         self.death_phase();
     }
 
@@ -1261,6 +1432,23 @@ impl Game {
                 None => Vec::new(),
             },
             Sel::FriendlyMinions => me.board.clone(),
+            Sel::OtherFriendlyMinions { race } => me
+                .board
+                .iter()
+                .copied()
+                .filter(|&m| {
+                    m != ctx.source && race.is_none_or(|r| self.entities[m].card.races.contains(&r))
+                })
+                .collect(),
+            Sel::EnemyMinions => opp.board.clone(),
+            Sel::AllMinions => me.board.iter().chain(&opp.board).copied().collect(),
+            Sel::MinionsWithAttackAtLeast(n) => me
+                .board
+                .iter()
+                .chain(&opp.board)
+                .copied()
+                .filter(|&m| self.entities[m].attack >= n)
+                .collect(),
             Sel::AllCharacters => {
                 let mut v = me.board.clone();
                 v.push(me.hero);
@@ -1285,8 +1473,9 @@ impl Game {
                 } else {
                     0
                 };
+                let lifesteal = self.entities[ctx.source].lifesteal;
                 for t in self.select(to, ctx) {
-                    self.damage(t, amount + bonus, false, ctx.owner);
+                    self.damage(t, amount + bonus, lifesteal, ctx.owner);
                 }
             }
             Effect::Heal { to, amount } => {
@@ -1391,6 +1580,106 @@ impl Game {
                 }
             }
             Effect::Counter => self.countered = true,
+            Effect::RandomSplitEnemyMinions(n) => {
+                // 法術傷害增加次數，每次仍 1 點
+                let n = if ctx.spell {
+                    n + self.spell_damage(ctx.owner)
+                } else {
+                    n
+                };
+                let lifesteal = self.entities[ctx.source].lifesteal;
+                for _ in 0..n {
+                    let candidates = self.living_minions(1 - ctx.owner);
+                    if candidates.is_empty() {
+                        break;
+                    }
+                    let i = self.random_int(0, candidates.len() as i64 - 1) as usize;
+                    self.damage(candidates[i], 1, lifesteal, ctx.owner);
+                }
+            }
+            Effect::Freeze(sel) => {
+                for t in self.select(sel, ctx) {
+                    self.entities[t].frozen = true;
+                }
+            }
+            Effect::IfHandEmpty(e) => {
+                if self.players[ctx.owner].hand.is_empty() {
+                    self.run(e, ctx);
+                }
+            }
+            Effect::IfTargetSurvived(e) => {
+                if ctx
+                    .target
+                    .is_some_and(|t| self.entities[t].health > 0 && !self.entities[t].destroyed)
+                {
+                    self.run(e, ctx);
+                }
+            }
+            Effect::DrawReduceCost(n) => {
+                let before = self.players[ctx.owner].hand.len();
+                self.draw(ctx.owner);
+                let hand = &self.players[ctx.owner].hand;
+                if hand.len() > before {
+                    let c = hand[hand.len() - 1];
+                    self.entities[c].cost_mod -= n;
+                }
+            }
+            Effect::SummonRandom(list) => {
+                if self.players[ctx.owner].board.len() < BOARD_LIMIT && !list.is_empty() {
+                    let i = self.random_int(0, list.len() as i64 - 1) as usize;
+                    let summon = Effect::Summon {
+                        card: list[i],
+                        count: 1,
+                    };
+                    self.run(&summon, ctx);
+                }
+            }
+            Effect::SetHealth { to, value } => {
+                for t in self.select(to, ctx) {
+                    let e = &mut self.entities[t];
+                    e.max_health = value + e.aura_health;
+                    e.health = e.max_health;
+                }
+                self.refresh_auras();
+            }
+            Effect::SwapAttackHealth(sel) => {
+                for t in self.select(sel, ctx) {
+                    let e = &mut self.entities[t];
+                    let (attack, health) = (e.attack, e.health);
+                    e.attack = health + e.aura_attack;
+                    e.temp_attack = 0;
+                    e.max_health = attack + e.aura_health;
+                    e.health = e.max_health;
+                }
+                self.refresh_auras();
+            }
+            Effect::AddToHand(id) => {
+                self.add_to_hand(ctx.owner, id);
+            }
+            Effect::WeaponAttack(n) => {
+                if let Some(w) = self.players[ctx.owner].weapon {
+                    self.entities[w].attack += n;
+                }
+            }
+            Effect::DestroyRandomEnemyMinion => {
+                let candidates = self.living_minions(1 - ctx.owner);
+                if !candidates.is_empty() {
+                    let i = self.random_int(0, candidates.len() as i64 - 1) as usize;
+                    self.entities[candidates[i]].destroyed = true;
+                }
+            }
+            Effect::ReturnRandomEnemyMinion => {
+                let candidates = self.living_minions(1 - ctx.owner);
+                if !candidates.is_empty() {
+                    let i = self.random_int(0, candidates.len() as i64 - 1) as usize;
+                    self.return_to_hand(candidates[i], 0);
+                }
+            }
+            Effect::AttackTarget => {
+                if let Some(t) = ctx.target {
+                    self.forced_attack(ctx.source, t);
+                }
+            }
             Effect::RandomSplitDamage(n) => {
                 for _ in 0..n {
                     let me = &self.players[ctx.owner];
@@ -1427,7 +1716,8 @@ impl Game {
     /// 洗牌一次；超過 3 張再洗一次後取前 3 張。
     fn discover_from_deck(&mut self, p: usize) {
         let mut list: Vec<EntityId> = self.players[p].deck.iter().rev().copied().collect();
-        list.sort_by_key(|&c| self.entities[c].card.dbf_id);
+        let key = |card: &'static Card| self.discover_order.0.map_or(card.dbf_id, |f| f(card));
+        list.sort_by_key(|&c| key(self.entities[c].card));
         list.dedup_by_key(|c| self.entities[*c].card.dbf_id);
         if list.is_empty() {
             return;
@@ -1563,11 +1853,15 @@ impl Game {
 
     fn start_turn(&mut self) {
         let p = self.current;
+        // 「在對手的回合」等依目前玩家而定的被動加成
+        self.refresh_auras();
         for q in 0..2 {
             let hero = self.players[q].hero;
             self.entities[hero].attacks_this_turn = 0;
+            self.entities[hero].forced_attacks = 0;
             for &m in &self.players[q].board {
                 self.entities[m].attacks_this_turn = 0;
+                self.entities[m].forced_attacks = 0;
             }
         }
         for &m in &self.players[p].board {
@@ -1609,19 +1903,20 @@ impl Game {
         if self.outcome.is_some() {
             return;
         }
-        // 本回合攻擊次數沒用完（也不是剛上場）的凍結角色解凍；用完才被凍結的要等下個自己的回合。
+        // 本回合攻擊次數沒用完（也不是剛上場不能攻擊）的凍結角色解凍；用完才被凍結的要等下個自己的回合。
+        // 剛上場的衝刺手下只有上場時對手有手下才算能攻擊。
         let hero = self.players[p].hero;
         let weapon_windfury = self.players[p]
             .weapon
             .is_some_and(|w| self.entities[w].windfury);
         let h = &mut self.entities[hero];
-        if h.frozen && h.attacks_this_turn < Self::max_attacks(h.windfury || weapon_windfury) {
+        if h.frozen && h.used_attacks() < Self::max_attacks(h.windfury || weapon_windfury) {
             h.frozen = false;
         }
         for &m in &self.players[p].board {
             let e = &mut self.entities[m];
-            if e.frozen && e.attacks_this_turn < Self::max_attacks(e.windfury) && !e.summoning_sick
-            {
+            let could_attack = !e.summoning_sick || e.charge || (e.rush && e.rush_had_targets);
+            if e.frozen && e.used_attacks() < Self::max_attacks(e.windfury) && could_attack {
                 e.frozen = false;
             }
         }
