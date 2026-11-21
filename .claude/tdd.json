@@ -36,7 +36,8 @@
     ".gitattributes",
     ".gitleaksignore"
   ],
-  "test_command_regex": "(^|[;&|]\\s*)cargo\\s+(\\+\\S+\\s+)?test\\b",
+  "test_command_regex": "(^|[;&|\"]\\s*)cargo\\s+(\\+\\S+\\s+)?test\\b",
+  "full_test_command_regex": "^cmd /c \"cargo test --workspace --exclude emberstone-difftest && cargo test -p emberstone-difftest --lib --bins --test batches --test build_script --test compare --test engine --test pool --test rng\"$",
   "language": "rust",
   "mcp_server": "rustrover",
   "code_extensions": [

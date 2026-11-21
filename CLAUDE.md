@@ -59,6 +59,7 @@ Cargo workspace，**相依只能單向**：data → core → cards → ai → si
 - 新增 RosettaStone patch 只要在 `tools/rosetta-bridge/patches/` 新增 `.patch` 檔（`build.bat` 依檔名順序自動套用）；修改同一段程式碼的修正要合併成一個 patch。
 - `cargo test` 一律透過 `mcp__rustrover__execute_terminal_command` 執行（Bash 跑會被擋）。不要加 `2>&1`（會少掉 Doc-tests）。
 - 這個工具偶爾掉 stderr 行或夾雜 NUL（RustRover 端問題），hook 會用 exit code 交叉檢查；結果判成 invalid 就重跑。
+- **結束一段的完整測試**（`tdd.json` 的 `full_test_command_regex`）是這一條（RustRover 終端機預設不是 shell，`&&` 要包在 `cmd /c` 裡）：`cmd /c "cargo test --workspace --exclude emberstone-difftest && cargo test -p emberstone-difftest --lib --bins --test batches --test build_script --test compare --test engine --test pool --test rng"`。橋接測試（`tests/bridge.rs`）一次跑會超過 MCP 時限，不在裡面：本段紅燈失敗過的橋接測試要另外分批跑到通過，hook 才會讓這段結束。difftest 新增測試檔時，同時更新這條指令和 `tdd.json`。
 - 跑測試時**不要用 `maxLinesCount`／`truncateMode` 截斷輸出**（用 `truncateMode: NONE`）：截掉 `test result:` 行會讓 hook 把綠燈判成 invalid。
 - `data/tw_all.json` 不在 git 裡；測試需要它，缺檔時照 `data/README.md` 下載固定版本。
 - `cargo build`／`clippy` 等不改檔的指令可用 Bash。`cargo fmt` 會改寫 `.rs` 而不經 hook 記錄，Stop 時會被列為未記錄變更，執行前先跟使用者確認。
