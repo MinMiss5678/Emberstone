@@ -1,0 +1,67 @@
+diff --git a/Includes/Rosetta/PlayMode/Cards/Cards.hpp b/Includes/Rosetta/PlayMode/Cards/Cards.hpp
+--- a/Includes/Rosetta/PlayMode/Cards/Cards.hpp
++++ b/Includes/Rosetta/PlayMode/Cards/Cards.hpp
+@@ -86,6 +86,11 @@ class Cards
+     static const std::vector<Card*> GetDiscoverCards(CardClass baseClass,
+                                                      FormatType format);
+ 
++    //! Overrides the candidates of discover (and other random generation)
++    //! with \p cards in this order; an empty list turns it off.
++    //! Used by the difftest bridge so both engines draw from the same list.
++    static void SetDiscoverOverride(std::vector<Card*> cards);
++
+     //! Returns a list of basic Totem cards.
+     //! \return A list of basic Totem cards.
+     static std::vector<Card*> GetBasicTotems();
+@@ -196,6 +201,7 @@ class Cards
+     static std::vector<Card*> m_basicTotems;
+     static std::vector<Card*> m_lackeys;
+     static std::vector<Card*> m_poisons;
++    static std::vector<Card*> m_discoverOverride;
+ };
+ }  // namespace RosettaStone::PlayMode
+ 
+diff --git a/Sources/Rosetta/PlayMode/Cards/Cards.cpp b/Sources/Rosetta/PlayMode/Cards/Cards.cpp
+--- a/Sources/Rosetta/PlayMode/Cards/Cards.cpp
++++ b/Sources/Rosetta/PlayMode/Cards/Cards.cpp
+@@ -30,6 +30,7 @@ std::vector<Card*> Cards::m_allClassicCards;
+ std::vector<Card*> Cards::m_basicTotems;
+ std::vector<Card*> Cards::m_lackeys;
+ std::vector<Card*> Cards::m_poisons;
++std::vector<Card*> Cards::m_discoverOverride;
+ 
+ Cards::Cards()
+ {
+@@ -143,6 +144,20 @@ const std::vector<Card*> Cards::GetDiscoverCards(CardClass baseClass,
+ {
+     std::vector<Card*> result;
+ 
++    // Override list: the player's class or neutral cards, in list order.
++    if (!m_discoverOverride.empty())
++    {
++        for (const auto& card : m_discoverOverride)
++        {
++            if (card->IsCardClass(baseClass) ||
++                card->GetCardClass() == CardClass::NEUTRAL)
++            {
++                result.emplace_back(card);
++            }
++        }
++        return result;
++    }
++
+     // NOTE: Assume there is no card that has 'CardType::SPELL' and
+     // 'CardClass::NEUTRAL'.
+     if (format == FormatType::STANDARD)
+@@ -175,6 +190,11 @@ const std::vector<Card*> Cards::GetDiscoverCards(CardClass baseClass,
+     return result;
+ }
+ 
++void Cards::SetDiscoverOverride(std::vector<Card*> cards)
++{
++    m_discoverOverride = std::move(cards);
++}
++
+ std::vector<Card*> Cards::GetBasicTotems()
+ {
+     return m_basicTotems;

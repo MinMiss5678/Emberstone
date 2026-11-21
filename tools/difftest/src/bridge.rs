@@ -224,4 +224,10 @@ impl Bridge {
         let r = self.request(json!({"cmd": "events"}))?;
         Self::field(r, "events")
     }
+
+    /// 指定隨機產生（發現等）的候選卡（RosettaStone 卡號，依序）；之後開的對局都用這份清單。
+    pub fn set_random_pool(&mut self, cards: &[String]) -> Result<(), BridgeError> {
+        self.request(json!({"cmd": "random_pool", "cards": cards}))?;
+        Ok(())
+    }
 }

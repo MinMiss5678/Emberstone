@@ -28,6 +28,12 @@ pub struct CardDef {
     pub choose: Option<[Choice; 2]>,
     /// 秘密：在對手回合符合條件時觸發（打出時放進秘密區，不執行 `play`）。
     pub secret: Option<Trigger>,
+    /// 流放：從手牌最左或最右打出時，`play` 之後再執行。
+    pub outcast: Option<Effect>,
+    /// 在手牌最左或最右時的費用（流放）。
+    pub outcast_cost: Option<i32>,
+    /// 以休眠上場，經過 n 個自己的回合開始後甦醒。
+    pub dormant: i32,
 }
 
 impl CardDef {
@@ -41,6 +47,9 @@ impl CardDef {
         aura: None,
         choose: None,
         secret: None,
+        outcast: None,
+        outcast_cost: None,
+        dormant: 0,
     };
 }
 
@@ -153,6 +162,12 @@ pub enum When {
     AfterOpponentCastsSpell,
     /// 秘密：對手打出手下後（目標是那隻手下）。
     AfterOpponentPlaysMinion,
+    /// 任一玩家打出法術時（結算前、反制前；目標是那張法術）。
+    AnySpellPlayed,
+    /// 對手抽到牌時（放進手牌或抽中時施放；燒掉、疲勞不算；目標是那張牌）。
+    OpponentDraws,
+    /// 你這一方有手下被效果召喚時（不是打出；目標是那隻手下）。場上有多隻時只有一隻觸發。
+    FriendlySummonByEffect,
 }
 
 /// 在場上時的觸發。
@@ -225,6 +240,16 @@ pub enum Effect {
     AttackTarget,
     /// 沉默。
     Silence(Sel),
+    /// 從職業法術（含中立）隨機挑 3 張不重複的發現（抽法同 RosettaStone：超過 3 張時洗牌一次取前 3 張）。
+    DiscoverSpell,
+    /// 本回合下一個法術費用 −n（打出任何法術就用掉）。
+    SpellDiscount(i32),
+    /// 把 n 張卡洗入自己的牌庫（抽法同 RosettaStone：每張放進牌庫後整副重洗）。
+    ShuffleIntoDeck { card: &'static str, count: i32 },
+    /// 上一個自己的回合打出的法術各放一張回手牌，隨機順序。
+    ReturnLastTurnSpells,
+    /// 在目標右邊召喚一隻相同的手下（卡德加；不再觸發召喚加倍）。
+    SummonCopy,
     /// 回到擁有者的手牌，費用 +cost（手牌滿了就消滅）。
     ReturnToHand { to: Sel, cost: i32 },
     /// 反制：讓觸發這個秘密的法術無效。

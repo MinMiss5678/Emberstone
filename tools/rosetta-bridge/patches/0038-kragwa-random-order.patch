@@ -1,0 +1,16 @@
+diff --git a/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp b/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
+--- a/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
++++ b/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
+@@ -2312,6 +2312,12 @@ void CoreCardsGen::AddShaman(std::map<std::string, CardDef>& cards)
+                 }
+             }
+ 
++            // Returned in random order
++            if (playedSpells.size() > 1)
++            {
++                Random::shuffle(playedSpells);
++            }
++
+             for (const auto& playedSpell : playedSpells)
+             {
+                 Playable* spell = Entity::GetFromCard(player, playedSpell);

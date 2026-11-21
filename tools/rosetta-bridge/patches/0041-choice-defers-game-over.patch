@@ -1,0 +1,29 @@
+diff --git a/Sources/Rosetta/PlayMode/Games/Game.cpp b/Sources/Rosetta/PlayMode/Games/Game.cpp
+--- a/Sources/Rosetta/PlayMode/Games/Game.cpp
++++ b/Sources/Rosetta/PlayMode/Games/Game.cpp
+@@ -808,6 +808,12 @@ std::tuple<PlayState, PlayState> Game::Process(Player* player,
+ 
+     taskStack.Reset();
+ 
++    // A pending choice defers the death phase, including the game over
++    if (player->choice)
++    {
++        return { GetPlayer1()->playState, GetPlayer2()->playState };
++    }
++
+     return CheckGameOver();
+ }
+ 
+@@ -819,6 +825,12 @@ std::tuple<PlayState, PlayState> Game::Process(Player* player, ITask&& task)
+ 
+     taskStack.Reset();
+ 
++    // A pending choice defers the death phase, including the game over
++    if (player->choice)
++    {
++        return { GetPlayer1()->playState, GetPlayer2()->playState };
++    }
++
+     return CheckGameOver();
+ }
+ 

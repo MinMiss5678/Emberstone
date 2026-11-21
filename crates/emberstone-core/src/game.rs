@@ -3,7 +3,7 @@
 //! 第 1 階段：數值與關鍵字。第 2 階段：卡片效果（英雄技能、指定目標、法術、戰吼……），
 //! 效果定義由 `emberstone-cards` 透過 `GameConfig::effects` 提供。
 
-use emberstone_data::{Card, CardType, Keyword, card_by_id};
+use emberstone_data::{Card, CardClass, CardType, Keyword, all_cards, card_by_id, is_standard_set};
 
 use crate::effects::{Aura, CardDef, Ctx, Effect, EffectLookup, Sel, TargetReq, Usable, When};
 use crate::rng::{Desync, Rng, RngEvent};
@@ -113,8 +113,6 @@ pub struct Entity {
     pub spell_damage: i32,
     /// 本回合剛上場（沒有衝鋒就不能攻擊；有衝刺只能攻擊手下）。
     pub summoning_sick: bool,
-    /// 上場當下對手場上有手下（剛上場的衝刺手下本回合能攻擊；凍結時決定何時解凍，第 3a 階段 H8）。
-    pub rush_had_targets: bool,
     pub attacks_this_turn: i32,
     /// 本回合效果要求的攻擊次數（伊利達瑞審判官、戰槌挑戰者）：算進 attacks_this_turn，但不佔攻擊次數。
     pub forced_attacks: i32,
@@ -131,6 +129,10 @@ pub struct Entity {
     pub silenced: bool,
     /// 費用增減。
     pub cost_mod: i32,
+    /// 費用設為固定值（例：阿拉巴斯特給的複製設為 1）；之後才套用費用增減。
+    pub cost_set: Option<i32>,
+    /// 休眠：還要經過幾個自己的回合開始才甦醒；0 為沒有休眠。
+    pub dormant: i32,
 }
 
 impl Entity {
@@ -158,7 +160,6 @@ impl Entity {
             frozen: false,
             spell_damage: card.spell_damage,
             summoning_sick: false,
-            rush_had_targets: false,
             attacks_this_turn: 0,
             forced_attacks: 0,
             temp_attack: 0,
@@ -168,6 +169,8 @@ impl Entity {
             aura_health: 0,
             silenced: false,
             cost_mod: 0,
+            cost_set: None,
+            dormant: 0,
         }
     }
 
@@ -210,6 +213,12 @@ pub struct Player {
     pub power_used: bool,
     /// 秘密區（依打出順序）。
     pub secrets: Vec<EntityId>,
+    /// 本回合下一個法術的減費（準備）；打出任何法術或回合結束就歸零。
+    pub spell_discount: i32,
+    /// 本回合打出的法術（含被反制的、秘密、幸運幣）。
+    pub spells_this_turn: Vec<&'static str>,
+    /// 上一個自己的回合打出的法術（奎格瓦）。
+    pub spells_last_turn: Vec<&'static str>,
 }
 
 /// 一方的英雄與牌組（照抽牌順序）。英雄技能是英雄卡號加上 `bp`。
@@ -235,6 +244,8 @@ pub struct GameConfig {
     pub effects: Option<EffectLookup>,
     /// 從牌庫發現時的排序鍵；None 為 dbfId。差分測試用來讓 RosettaStone 以原版卡號實作的卡照原版 dbfId 排序。
     pub discover_order: Option<fn(&'static Card) -> u32>,
+    /// 隨機產生（發現等）的候選卡，依序；None 為標準模式的可收藏卡。差分測試用來讓兩個引擎的候選相同。
+    pub random_pool: Option<&'static [&'static str]>,
 }
 
 /// 卡片效果的查詢函式；比較對局時不比它（同一局一定相同）。
@@ -269,6 +280,22 @@ impl std::fmt::Debug for DiscoverOrder {
     }
 }
 
+/// 隨機產生的候選卡；比較對局時不比它（同一局一定相同）。
+#[derive(Clone, Copy)]
+struct RandomPool(Option<&'static [&'static str]>);
+
+impl PartialEq for RandomPool {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl std::fmt::Debug for RandomPool {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("RandomPool")
+    }
+}
+
 /// 一局對戰。整份可複製。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Game {
@@ -282,6 +309,7 @@ pub struct Game {
     desync: Option<Desync>,
     effects: Effects,
     discover_order: DiscoverOrder,
+    random_pool: RandomPool,
     /// 下一個上場的順序編號。
     next_order: u32,
     /// 死亡階段中，已移出戰場、死亡之聲還沒結算完的手下：(手下, 擁有者, 召喚位置)。
@@ -294,6 +322,8 @@ pub struct Game {
     choice: Option<(usize, Vec<EntityId>)>,
     /// 目前施放的法術被反制。
     countered: bool,
+    /// 選擇畫面出現時暫停的出牌：選完才結算它之後的流程（死亡階段、秘密；第 3b 階段 C3b）。
+    pending: Option<EntityId>,
 }
 
 fn lookup(id: &str) -> Result<&'static Card, GameError> {
@@ -335,6 +365,9 @@ impl Game {
                 fatigue: 0,
                 power_used: false,
                 secrets: Vec::new(),
+                spell_discount: 0,
+                spells_this_turn: Vec::new(),
+                spells_last_turn: Vec::new(),
             })
         };
         let p0 = make_player(0, &config.players[0])?;
@@ -349,12 +382,14 @@ impl Game {
             desync: None,
             effects,
             discover_order: DiscoverOrder(config.discover_order),
+            random_pool: RandomPool(config.random_pool),
             next_order: 1,
             dr_markers: Vec::new(),
             lingering: Vec::new(),
             defer_auras: false,
             choice: None,
             countered: false,
+            pending: None,
         };
         if config.shuffle {
             for p in 0..2 {
@@ -404,6 +439,26 @@ impl Game {
 
     pub fn outcome(&self) -> Option<Outcome> {
         self.outcome
+    }
+
+    /// 手牌中一張牌目前的費用（含流放、準備等調整）。
+    pub fn hand_cost(&self, id: EntityId) -> i32 {
+        let e = &self.entities[id];
+        let owner = &self.players[e.owner];
+        let mut cost = e.cost_set.unwrap_or(e.card.cost.unwrap_or(0));
+        // 流放的費用：在手牌最左或最右時
+        if let Some(c) = e.def().and_then(|d| d.outcast_cost)
+            && let Some(i) = owner.hand.iter().position(|&h| h == id)
+            && (i == 0 || i + 1 == owner.hand.len())
+        {
+            cost = c;
+        }
+        // 先設為固定值，再套用增減（第 3b 階段 A6）
+        cost += e.cost_mod;
+        if e.card.card_type == CardType::Spell {
+            cost -= owner.spell_discount;
+        }
+        cost.max(0)
     }
 
     /// 英雄目前的攻擊力（自己回合才算武器）。
@@ -462,7 +517,6 @@ impl Game {
 
     /// 手下上場：放進戰場並記下上場順序。
     fn enter_board(&mut self, player: usize, id: EntityId, pos: usize) {
-        self.entities[id].rush_had_targets = !self.players[1 - player].board.is_empty();
         self.players[player].board.insert(pos, id);
         self.entities[id].play_order = self.next_order;
         self.next_order += 1;
@@ -480,9 +534,16 @@ impl Game {
         e.play_order = play_order;
         // 視同剛上場
         e.summoning_sick = true;
-        e.rush_had_targets = !self.players[1 - owner].board.is_empty();
         self.entities[id] = e;
         self.refresh_auras();
+    }
+
+    /// 一方戰場上有沒有不在休眠的手下。
+    fn has_active_minions(&self, player: usize) -> bool {
+        self.players[player]
+            .board
+            .iter()
+            .any(|&m| self.entities[m].dormant == 0)
     }
 
     /// 目前的選擇畫面選項（發現等）。
@@ -567,6 +628,10 @@ impl Game {
     /// 戰場上 board[j] 的被動加成給 board[i] 的（攻擊力, 生命）。
     fn aura_bonus(&self, board: &[EntityId], j: usize, i: usize) -> (i32, i32) {
         let (s, m) = (board[j], board[i]);
+        // 休眠中的手下不給也不受被動加成（第 3b 階段 B3）
+        if self.entities[s].dormant > 0 || self.entities[m].dormant > 0 {
+            return (0, 0);
+        }
         let Some(aura) = self.entities[s].def().and_then(|d| d.aura) else {
             return (0, 0);
         };
@@ -642,7 +707,7 @@ impl Game {
             .board
             .iter()
             .copied()
-            .filter(|&m| m != summoned)
+            .filter(|&m| m != summoned && self.entities[m].dormant == 0)
             .collect();
         holders.sort_by_key(|&m| self.entities[m].play_order);
         for m in holders {
@@ -664,6 +729,64 @@ impl Game {
                     self.run(&t.effect, &ctx);
                 }
             }
+        }
+    }
+
+    /// 依上場順序、不在休眠的觸發者：players 中各方戰場上，有 when 這種觸發的手下。
+    fn trigger_holders(&self, players: &[usize], when: When) -> Vec<EntityId> {
+        let mut holders: Vec<EntityId> = players
+            .iter()
+            .flat_map(|&p| self.players[p].board.iter().copied())
+            .filter(|&m| {
+                self.entities[m].dormant == 0
+                    && self.entities[m]
+                        .def()
+                        .is_some_and(|d| d.triggers.iter().any(|t| t.when == when))
+            })
+            .collect();
+        holders.sort_by_key(|&m| self.entities[m].play_order);
+        holders
+    }
+
+    /// 執行 m 身上 when 這種觸發（目標是 target）。
+    fn fire_holder(&mut self, m: EntityId, when: When, target: Option<EntityId>) {
+        let Some(def) = self.entities[m].def() else {
+            return;
+        };
+        for t in def.triggers {
+            if t.when == when {
+                let ctx = Ctx {
+                    source: m,
+                    owner: self.entities[m].owner,
+                    target,
+                    spell: false,
+                    deathrattle: false,
+                };
+                self.run(&t.effect, &ctx);
+            }
+        }
+    }
+
+    /// 「任一玩家打出法術時」的觸發（博學行者阿洲；雙方，依上場順序）。
+    fn fire_spell_played(&mut self, spell: EntityId) {
+        for m in self.trigger_holders(&[0, 1], When::AnySpellPlayed) {
+            self.fire_holder(m, When::AnySpellPlayed, Some(spell));
+        }
+    }
+
+    /// 「對手抽到牌時」的觸發（大鑰師阿拉巴斯特）：p 抽到 card。
+    fn fire_drawn(&mut self, p: usize, card: EntityId) {
+        for m in self.trigger_holders(&[1 - p], When::OpponentDraws) {
+            self.fire_holder(m, When::OpponentDraws, Some(card));
+        }
+    }
+
+    /// 效果召喚的手下多召喚一隻（卡德加）：只有第一隻卡德加觸發（第 3b 階段 E4）。
+    fn double_summon(&mut self, summoned: EntityId) {
+        let owner = self.entities[summoned].owner;
+        let holders = self.trigger_holders(&[owner], When::FriendlySummonByEffect);
+        if let Some(&m) = holders.iter().find(|&&m| m != summoned) {
+            self.fire_holder(m, When::FriendlySummonByEffect, Some(summoned));
         }
     }
 
@@ -701,7 +824,7 @@ impl Game {
         for (i, &e) in me.hand.iter().enumerate() {
             let entity = &self.entities[e];
             let card = entity.card;
-            if !self.affordable(entity) || !self.usable(entity) {
+            if !self.affordable(e) || !self.usable(entity) {
                 continue;
             }
             for (which, req) in self.play_options(entity) {
@@ -802,9 +925,9 @@ impl Game {
 
     // ---- 合法性 ----
 
-    fn affordable(&self, entity: &Entity) -> bool {
+    fn affordable(&self, id: EntityId) -> bool {
         // 超載可以讓可用法力變成負的，但 0 費的牌一律能打出
-        let cost = entity.cost();
+        let cost = self.hand_cost(id);
         cost == 0 || cost <= self.players[self.current].mana
     }
 
@@ -831,7 +954,7 @@ impl Game {
         let me = &self.players[self.current];
         let power = &self.entities[me.hero_power];
         let def = power.def()?;
-        if me.power_used || !self.affordable(power) || !self.usable(power) {
+        if me.power_used || !self.affordable(me.hero_power) || !self.usable(power) {
             return None;
         }
         if def.target != TargetReq::None && self.targets(def.target, self.current).is_empty() {
@@ -882,7 +1005,11 @@ impl Game {
             }
             if minions {
                 for (index, &m) in self.players[side].board.iter().enumerate() {
-                    if (mine || !self.entities[m].stealth) && minion_ok(m) {
+                    // 休眠中的手下不能被指定（第 3b 階段 B3）
+                    if (mine || !self.entities[m].stealth)
+                        && self.entities[m].dormant == 0
+                        && minion_ok(m)
+                    {
                         out.push(Target::Minion {
                             player: side,
                             index,
@@ -911,7 +1038,7 @@ impl Game {
                 };
                 let entity = &self.entities[e];
                 let card = entity.card;
-                if !self.affordable(entity) || !self.usable(entity) {
+                if !self.affordable(e) || !self.usable(entity) {
                     return false;
                 }
                 let Some(&(_, req)) = self
@@ -969,7 +1096,7 @@ impl Game {
             return false;
         };
         let e = &self.entities[id];
-        if e.owner != self.current || e.frozen {
+        if e.owner != self.current || e.frozen || e.dormant > 0 {
             return false;
         }
         let (attack, windfury) = match attacker {
@@ -1006,7 +1133,7 @@ impl Game {
             .iter()
             .enumerate()
             .map(|(i, &m)| (i, &self.entities[m]))
-            .filter(|(_, m)| !m.stealth)
+            .filter(|(_, m)| !m.stealth && m.dormant == 0)
             .collect();
         let has_taunt = visible.iter().any(|(_, m)| m.taunt);
         let mut out: Vec<Target> = visible
@@ -1025,11 +1152,19 @@ impl Game {
 
     fn play(&mut self, hand: usize, pos: Option<usize>, target: Option<EntityId>, choose_one: u8) {
         let p = self.current;
+        // 流放：看打出當下的位置（第 3b 階段 A1）
+        let outcast = hand == 0 || hand + 1 == self.players[p].hand.len();
+        let cost = self.hand_cost(self.players[p].hand[hand]);
         let e = self.players[p].hand.remove(hand);
         let card = self.entities[e].card;
-        self.players[p].mana -= self.entities[e].cost();
+        self.players[p].mana -= cost;
         if card.card_type != CardType::Spell {
             self.players[p].overload_owed += card.overload;
+        }
+        if card.card_type == CardType::Spell {
+            // 打出任何法術就用掉準備（含會被反制的；第 3b 階段 A4）
+            self.players[p].spell_discount = 0;
+            self.players[p].spells_this_turn.push(card.id);
         }
         let ctx = Ctx {
             source: e,
@@ -1042,12 +1177,15 @@ impl Game {
             CardType::Minion => {
                 let pos = pos.expect("已檢查手下有位置");
                 self.entities[e].summoning_sick = true;
+                self.entities[e].dormant = self.entities[e].def().map_or(0, |d| d.dormant);
                 self.enter_board(p, e, pos);
             }
             CardType::Weapon => self.equip_entity(p, e),
             _ => {}
         }
         if card.card_type == CardType::Spell {
+            // 打出時、結算與反制前（博學行者阿洲；第 3b 階段 D2、D3）
+            self.fire_spell_played(e);
             // 對手的反制秘密
             self.countered = false;
             self.reveal_secrets(1 - p, &[When::OpponentCastsSpell], e);
@@ -1074,13 +1212,31 @@ impl Game {
         if let Some(effect) = effect {
             self.run(&effect, &ctx);
         }
+        if outcast && let Some(effect) = self.entities[e].def().and_then(|d| d.outcast) {
+            self.run(&effect, &ctx);
+        }
+        if self.choice.is_some() {
+            // 選擇畫面：之後的流程等選完才結算（第 3b 階段 C3、C3b）
+            self.pending = Some(e);
+            return;
+        }
+        self.finish_play(e);
+    }
+
+    /// 出牌效果結算後的流程：死亡階段、「召喚後」觸發與對手的秘密。
+    fn finish_play(&mut self, e: EntityId) {
+        let card = self.entities[e].card;
+        let p = self.entities[e].owner;
         if card.card_type == CardType::Minion {
             // 戰吼結算後先進入死亡階段，再做「召喚後」觸發與對手「打出手下後」的秘密（case C1、C6）；
             // 英雄在這個死亡階段死亡時流程照樣繼續，最後的死亡階段才定勝負（case C7）
             self.death_phase();
-            self.fire_summon(e);
-            self.fire_after_play(e);
-            self.reveal_secrets(1 - p, &[When::AfterOpponentPlaysMinion], e);
+            // 以休眠上場不觸發（第 3b 階段 B5）
+            if self.entities[e].dormant == 0 {
+                self.fire_summon(e);
+                self.fire_after_play(e);
+                self.reveal_secrets(1 - p, &[When::AfterOpponentPlaysMinion], e);
+            }
         }
         if card.card_type == CardType::Spell {
             // 法術結算完、死亡階段之後，對手「施放法術後」的秘密（第 3a 階段 E2）
@@ -1091,7 +1247,8 @@ impl Game {
     }
 
     /// 揭露並觸發 player 秘密區中條件在 whens 裡的秘密（不分條件，依打出順序）；target 是觸發者。
-    /// 觸發者已死亡或離開戰場時，之後作用在觸發者上的秘密不再觸發；「英雄被攻擊」照樣觸發。
+    /// 觸發者已死亡或離開戰場時，之後作用在觸發者上的秘密不再觸發；「英雄被攻擊」「手下被攻擊」照樣觸發
+    /// （條件看被攻擊的一方；第 2 階段 I3a、第 3b 階段 H4）。
     fn reveal_secrets(&mut self, player: usize, whens: &[When], target: EntityId) {
         // 同一次觸發的秘密都結算完才更新被動加成（case I3d）
         let outer = std::mem::replace(&mut self.defer_auras, true);
@@ -1111,7 +1268,11 @@ impl Game {
             };
             match matches {
                 Some(trigger)
-                    if (!gone || trigger.when == When::OwnHeroAttacked)
+                    if (!gone
+                        || matches!(
+                            trigger.when,
+                            When::OwnHeroAttacked | When::FriendlyMinionAttacked
+                        ))
                         && self.secret_can_fire(&trigger.effect, player) =>
                 {
                     self.players[player].secrets.remove(i);
@@ -1148,7 +1309,10 @@ impl Game {
             .board
             .iter()
             .copied()
-            .filter(|&m| self.entities[m].health > 0 && !self.entities[m].destroyed)
+            .filter(|&m| {
+                let e = &self.entities[m];
+                e.health > 0 && !e.destroyed && e.dormant == 0
+            })
             .collect()
     }
 
@@ -1206,7 +1370,7 @@ impl Game {
         self.damage(target, amount, false, source_owner)
     }
 
-    /// 選擇畫面選第 index 個：從牌庫發現的牌放進手牌（手牌滿了摧毀）。
+    /// 選擇畫面選第 index 個：選的牌放進手牌（手牌滿了摧毀），再結算暫停的出牌流程。
     fn choose(&mut self, index: usize) {
         let (p, options) = self.choice.take().expect("已檢查有選擇畫面");
         let picked = options[index];
@@ -1214,6 +1378,9 @@ impl Game {
         player.deck.retain(|&c| c != picked);
         if player.hand.len() < HAND_LIMIT {
             player.hand.push(picked);
+        }
+        if let Some(e) = self.pending.take() {
+            self.finish_play(e);
         }
     }
 
@@ -1411,6 +1578,13 @@ impl Game {
     // ---- 效果 ----
 
     fn select(&self, sel: Sel, ctx: &Ctx) -> Vec<EntityId> {
+        let mut v = self.select_all(sel, ctx);
+        // 休眠中的手下不受效果影響（第 3b 階段 B3）
+        v.retain(|&m| self.entities[m].dormant == 0);
+        v
+    }
+
+    fn select_all(&self, sel: Sel, ctx: &Ctx) -> Vec<EntityId> {
         let me = &self.players[ctx.owner];
         let opp = &self.players[1 - ctx.owner];
         match sel {
@@ -1517,14 +1691,13 @@ impl Game {
                             None => board.len(),
                         }
                     };
-                    if self.summon(ctx.owner, card, pos).is_some() && ctx.deathrattle {
-                        // 放入一隻後，還沒結算的死亡手下中位置在插入點或右邊的往右推一格
-                        for m in &mut self.dr_markers {
-                            if m.1 == ctx.owner && m.2 >= pos {
-                                m.2 += 1;
-                            }
-                        }
+                    let Some(summoned) = self.summon(ctx.owner, card, pos) else {
+                        continue;
+                    };
+                    if ctx.deathrattle {
+                        self.shift_markers(ctx.owner, pos);
                     }
+                    self.double_summon(summoned);
                 }
             }
             Effect::Equip(id) => {
@@ -1580,6 +1753,56 @@ impl Game {
                 }
             }
             Effect::Counter => self.countered = true,
+            Effect::DiscoverSpell => self.discover_spell(ctx.owner),
+            Effect::SpellDiscount(n) => self.players[ctx.owner].spell_discount = n,
+            Effect::ShuffleIntoDeck { card, count } => {
+                let Some(card) = card_by_id(card) else {
+                    return;
+                };
+                for _ in 0..count {
+                    let id = self.new_entity(card, ctx.owner);
+                    // 同 RosettaStone：放進牌庫頂後整副重洗（RosettaStone 的牌庫順序和這裡相反）
+                    let mut rs: Vec<EntityId> =
+                        self.players[ctx.owner].deck.iter().rev().copied().collect();
+                    rs.push(id);
+                    let rs = self.shuffled(rs);
+                    self.players[ctx.owner].deck = rs.into_iter().rev().collect();
+                }
+            }
+            Effect::ReturnLastTurnSpells => {
+                let mut list = self.players[ctx.owner].spells_last_turn.clone();
+                if list.len() > 1 {
+                    match self.rng.shuffle(list.len()) {
+                        Ok(perm) => list = perm.iter().map(|&i| list[i]).collect(),
+                        Err(d) => {
+                            self.desync.get_or_insert(d);
+                        }
+                    }
+                }
+                for id in list {
+                    if self.add_to_hand(ctx.owner, id).is_none() {
+                        break;
+                    }
+                }
+            }
+            Effect::SummonCopy => {
+                let Some(t) = ctx.target else {
+                    return;
+                };
+                let owner = self.entities[t].owner;
+                let board = &self.players[owner].board;
+                if board.len() >= BOARD_LIMIT {
+                    return;
+                }
+                let Some(i) = board.iter().position(|&m| m == t) else {
+                    return;
+                };
+                let pos = i + 1;
+                let card = self.entities[t].card.id;
+                if self.summon(owner, card, pos).is_some() {
+                    self.shift_markers(owner, pos);
+                }
+            }
             Effect::RandomSplitEnemyMinions(n) => {
                 // 法術傷害增加次數，每次仍 1 點
                 let n = if ctx.spell {
@@ -1616,11 +1839,10 @@ impl Game {
                 }
             }
             Effect::DrawReduceCost(n) => {
-                let before = self.players[ctx.owner].hand.len();
+                // 只減抽到的那張；它是抽中時施放的牌（已施放）或被燒掉時就落空（第 3b 階段 H1）
+                let drawn = self.players[ctx.owner].deck.first().copied();
                 self.draw(ctx.owner);
-                let hand = &self.players[ctx.owner].hand;
-                if hand.len() > before {
-                    let c = hand[hand.len() - 1];
+                if let Some(c) = drawn.filter(|c| self.players[ctx.owner].hand.contains(c)) {
                     self.entities[c].cost_mod -= n;
                 }
             }
@@ -1694,8 +1916,10 @@ impl Game {
                     candidates.extend(opp.board.iter().copied());
                     candidates.push(opp.hero);
                     // 前幾發已經打死（生命 ≤ 0）的角色不再挑（case F4a）
-                    candidates
-                        .retain(|&c| self.entities[c].health > 0 && !self.entities[c].destroyed);
+                    candidates.retain(|&c| {
+                        let e = &self.entities[c];
+                        e.health > 0 && !e.destroyed && e.dormant == 0
+                    });
                     if candidates.is_empty() {
                         break;
                     }
@@ -1739,6 +1963,56 @@ impl Game {
                 list
             }
         }
+    }
+
+    /// 死亡之聲結算中召喚了一隻到 owner 戰場第 pos 格：還沒結算的死亡手下中位置在插入點或右邊的往右推一格。
+    fn shift_markers(&mut self, owner: usize, pos: usize) {
+        for m in &mut self.dr_markers {
+            if m.1 == owner && m.2 >= pos {
+                m.2 += 1;
+            }
+        }
+    }
+
+    /// 發現一個法術：候選是你職業的法術加中立法術（差分測試用指定清單），去掉重複；
+    /// 抽法同 RosettaStone：超過 3 張時洗牌一次取前 3 張，否則全部照順序列出。
+    fn discover_spell(&mut self, p: usize) {
+        let class = self.entities[self.players[p].hero].card.class;
+        let ok = |c: &Card| {
+            c.card_type == CardType::Spell
+                && c.collectible
+                && (c.class == class || c.class == Some(CardClass::Neutral))
+        };
+        let mut cards: Vec<&'static Card> = Vec::new();
+        let mut push = |c: &'static Card| {
+            if ok(c) && !cards.iter().any(|x| x.id == c.id) {
+                cards.push(c);
+            }
+        };
+        match self.random_pool.0 {
+            Some(ids) => ids
+                .iter()
+                .filter_map(|id| card_by_id(id))
+                .for_each(&mut push),
+            None => all_cards()
+                .iter()
+                .filter(|c| is_standard_set(c.set))
+                .for_each(&mut push),
+        }
+        if cards.is_empty() {
+            return;
+        }
+        if cards.len() > 3 {
+            match self.rng.shuffle(cards.len()) {
+                Ok(perm) => cards = perm.iter().map(|&i| cards[i]).collect(),
+                Err(d) => {
+                    self.desync.get_or_insert(d);
+                }
+            }
+            cards.truncate(3);
+        }
+        let options = cards.iter().map(|&c| self.new_entity(c, p)).collect();
+        self.choice = Some((p, options));
     }
 
     /// 死亡階段：移除耐久度歸零的武器；死亡的手下依上場順序逐一移出戰場（記下移除時的位置），
@@ -1833,6 +2107,10 @@ impl Game {
             return;
         }
         let card = player.deck.remove(0);
+        // 手牌滿了燒掉（抽中時施放的也不施放、不補抽；第 3b 階段 F3）
+        if self.players[p].hand.len() >= HAND_LIMIT {
+            return;
+        }
         if let Some(effect) = self.entities[card].def().and_then(|d| d.when_drawn) {
             let ctx = Ctx {
                 source: card,
@@ -1843,12 +2121,12 @@ impl Game {
             };
             self.run(&effect, &ctx);
             self.draw(p);
+            // 阿拉巴斯特：補抽的那張先複製，再複製抽中時施放的牌（第 3b 階段 D6）
+            self.fire_drawn(p, card);
             return;
         }
-        let player = &mut self.players[p];
-        if player.hand.len() < HAND_LIMIT {
-            player.hand.push(card);
-        }
+        self.players[p].hand.push(card);
+        self.fire_drawn(p, card);
     }
 
     fn start_turn(&mut self) {
@@ -1867,7 +2145,23 @@ impl Game {
         for &m in &self.players[p].board {
             self.entities[m].summoning_sick = false;
         }
+        // 休眠倒數；甦醒時視同剛上場（第 3b 階段 B2、B4、B6：不算召喚）
+        let mut woke = false;
+        for i in 0..self.players[p].board.len() {
+            let m = self.players[p].board[i];
+            if self.entities[m].dormant > 0 {
+                self.entities[m].dormant -= 1;
+                if self.entities[m].dormant == 0 {
+                    self.entities[m].summoning_sick = true;
+                    woke = true;
+                }
+            }
+        }
+        if woke {
+            self.refresh_auras();
+        }
         let me = &mut self.players[p];
+        me.spells_last_turn = std::mem::take(&mut me.spells_this_turn);
         me.max_mana = (me.max_mana + 1).min(MANA_LIMIT);
         me.overload_locked = me.overload_owed;
         me.overload_owed = 0;
@@ -1904,7 +2198,8 @@ impl Game {
             return;
         }
         // 本回合攻擊次數沒用完（也不是剛上場不能攻擊）的凍結角色解凍；用完才被凍結的要等下個自己的回合。
-        // 剛上場的衝刺手下只有上場時對手有手下才算能攻擊。
+        // 剛上場的衝刺手下看回合結束當下對手有沒有手下（第 3b 階段 B4b）。
+        let rush_targets = self.has_active_minions(1 - p);
         let hero = self.players[p].hero;
         let weapon_windfury = self.players[p]
             .weapon
@@ -1915,7 +2210,7 @@ impl Game {
         }
         for &m in &self.players[p].board {
             let e = &mut self.entities[m];
-            let could_attack = !e.summoning_sick || e.charge || (e.rush && e.rush_had_targets);
+            let could_attack = !e.summoning_sick || e.charge || (e.rush && rush_targets);
             if e.frozen && e.used_attacks() < Self::max_attacks(e.windfury) && could_attack {
                 e.frozen = false;
             }
@@ -1927,6 +2222,8 @@ impl Game {
                 e.temp_attack = 0;
             }
         }
+        // 準備的減費只到回合結束
+        self.players[p].spell_discount = 0;
         self.current = 1 - p;
         self.turn += 1;
         self.start_turn();

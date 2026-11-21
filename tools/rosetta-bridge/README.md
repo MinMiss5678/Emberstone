@@ -50,23 +50,30 @@ tools\rosetta-bridge\build.bat
   - `0015-random-split-no-target.patch`：「隨機分配給其他角色」沒有可選的角色時，該發不造成傷害（case F4b；RosettaStone 原本會打在上一發選中的目標上）
   - `0016-explosive-runes-divine-shield.patch`：爆炸符文打到聖盾手下時，聖盾只吸收等於手下生命的傷害，其餘打英雄（case I4a，依 Hearthstone Wiki；RosettaStone 原本只在手下死亡時才溢出）；6 點加上法術傷害、溢出照總量算（第 3a 階段 A1，實測 R10；RosettaStone 原本用 6 − 生命 再加法術傷害，生命正好 6 時少算溢出）
   - （`0017` 已撤掉：原本依 Wiki 的解讀讓戰吼後不先處理死亡；使用者實測證明戰吼後會先進入死亡階段，RosettaStone 原本的做法才對，case C1、C6）
-  - `0018-freeze-thaw-attacks-left.patch`：在自己回合被凍結、攻擊次數還沒用完（例如風怒只攻擊一次）的手下，本回合結束就解凍（第 1 階段 case D9a，依 Wiki Freeze）
+  - `0018-freeze-thaw-attacks-left.patch`：在自己回合被凍結、攻擊次數還沒用完（例如風怒只攻擊一次）的手下，本回合結束就解凍（第 1 階段 case D9a，依 Wiki Freeze）；剛上場的衝刺手下被凍結時，看回合結束當下對手有沒有手下，沒有就到下一個自己的回合結束才解凍（第 3b 階段 B4b，實測 R11、R15、R16）
   - `0019-zero-cost-with-overload.patch`：超載超過水晶上限讓可用法力變成負的時候，0 費的牌照樣能打出（第 1 階段 case B3a，依 Wiki Mana）
   - `0022-silence-removes-poisonous.patch`：沉默也移除致命劇毒與凍結效果（case H1；RosettaStone 原本漏了這兩個關鍵字，被沉默的劇毒手下仍會消滅攻擊者、被沉默的水元素仍會凍結）；剛上場的衝刺手下被沉默後當回合不能攻擊（case H1、第 1 階段 C3；RosettaStone 原本沉默後仍可攻擊手下）
   - `0021-aura-update-second-pass.patch`：更新被動加成時多跑一輪，讓「受傷時」的加成看到其他加成移除後的生命（例如暴風城勇士在戰鬥中死亡，剛好回滿的血蹄勇戰者立刻失去 +3 攻擊；case E4、E7）
   - `0020-transform-keeps-play-order.patch`：變形後的手下保留原本的上場順序（case F1b，使用者實測；Wiki 寫「排到最後面」與實測不符，RosettaStone 原本照 Wiki）
   - `0023-transform-removes-trigger.patch`：變形時移除原本手下的觸發效果（case F1；RosettaStone 原本留著，例如被變成綿羊的治療圖騰每回合結束仍會治療）
-  - `0024-silenced-charge-exhausted.patch`：剛上場的衝鋒手下也標記為「剛上場」（衝鋒讓它照樣能攻擊），這回合被沉默失去衝鋒後就不能攻擊（case H1；RosettaStone 原本沉默後仍可攻擊）；衝刺手下上場時對手沒有手下，視同一般剛上場的手下（本回合不能攻擊，被凍結時到下一個自己的回合結束才解凍；第 3a 階段 H8，實測 R11）
-  - `0025-aoe-hits-mortally-wounded.patch`：全場傷害（全部角色／全部手下／敵方／友方）也打到生命已歸零、還沒移出戰場的手下，例如同一批的第二個死亡之聲照樣打到第一個打死的手下，白沫狂戰士也照算（case D6，使用者實測；RosettaStone 原本列戰場時一律排除，隨機目標維持排除）
+  - `0024-silenced-charge-exhausted.patch`：剛上場的衝鋒手下也標記為「剛上場」（衝鋒讓它照樣能攻擊），這回合被沉默失去衝鋒後就不能攻擊（case H1；RosettaStone 原本沉默後仍可攻擊）  - `0025-aoe-hits-mortally-wounded.patch`：全場傷害（全部角色／全部手下／敵方／友方）也打到生命已歸零、還沒移出戰場的手下，例如同一批的第二個死亡之聲照樣打到第一個打死的手下，白沫狂戰士也照算（case D6，使用者實測；RosettaStone 原本列戰場時一律排除，隨機目標維持排除）
   - `0026-fogsail-target-needs-weapon.patch`：霧帆掠劫者（`CS3_022`）只有裝備武器時才要選戰吼目標（第 3a 階段 B5；RosettaStone 原本沒有武器也要選，新增 `REQ_TARGET_IF_AVAILABLE_AND_WEAPON_EQUIPPED`）
   - `0027-alchemist-swap-current-health.patch`：瘋狂的鍊金師對調後清掉傷害（目前生命成為新的上限），本回合的加成併入對調後的數值、回合結束不再扣；焦油蠕行者「對手回合 +2」併入後再套用一次；激怒的加成併入後不再扣掉（第 3a 階段 C7、H1；RosettaStone 原本保留傷害，受傷的手下會變成 0 以下，+2 也不再套用，激怒中的葛羅瑪許對調後再被扣 6 攻擊）
   - `0028-wailing-vapor-friendly-only.patch`：哀嚎水氣（`WC_042`）只在自己打出元素後觸發（第 3a 階段 D4；RosettaStone 原本對手打出也觸發）
-  - `0029-pressure-plate-after-spell.patch`：踏板陷阱（`ULD_152`）在對手的法術結算完才觸發（第 3a 階段 E2；RosettaStone 原本在施放時、結算前觸發）
+  - `0029-pressure-plate-after-spell.patch`：踏板陷阱（`ULD_152`）在對手的法術結算完才觸發（第 3a 階段 E2；RosettaStone 原本在施放時、結算前觸發）；對手場上只有休眠中的手下時不觸發（第 3b 階段 H3，實測 R19）
   - `0030-adaptive-effect-silence.patch`：「依情況變化」的數值效果（焦油蠕行者）被沉默時立刻扣回已加的值（第 3a 階段 D2；RosettaStone 原本在沉默重設數值後才扣，攻擊力變成 0）；離場時數值已重設，不再扣（否則回到手牌再打出會變成 0 攻）
   - `0031-forced-attack-not-exhausted.patch`：效果要求的攻擊（伊利達瑞審判官跟著英雄攻擊、戰槌挑戰者互打）不會用掉攻擊次數（第 3a 階段 D5，使用者實測 R4；RosettaStone 原本攻擊後就不能再攻擊）
   - `0032-warmaul-challenger-duel.patch`：戰槌挑戰者（`BT_120`）沒有目標時戰吼不發動；互打最多 30 次，任一方死亡或離場就停止（第 3a 階段 D6；RosettaStone 原本沒有目標會內部錯誤，一方離場會無窮迴圈）
   - `0033-boomkin-damage-not-spell.patch`：平衡梟獸二選一的「造成 4 點傷害」（`ONY_018t2`）是手下效果，不加法術傷害（第 3a 階段 A1；RosettaStone 原本當成法術傷害）
+  - `0035-discover-pool-override.patch`：發現（`Cards::GetDiscoverCards`）的候選可由橋接程式的 `random_pool` 指令指定，依清單順序、只留玩家職業與中立的卡；差分測試用來讓兩個引擎的候選相同（第 3 階段 Q2）
+  - `0036-discover-defers-rest-of-play.patch`：法術的發現出現選擇畫面時，之後的死亡階段、「施放法術後」與「打出卡牌後」的觸發都等選完才結算；已觸發的效果（白沫狂戰士 +1）在選擇畫面出現前就生效（第 3b 階段 C3、C3b、H2，實測 R5、R13、R18；RosettaStone 原本選擇畫面出現時就全部結算完）
+  - `0037-dormant-untouchable.patch`：休眠中的手下（實體上的 `UNTOUCHABLE`，進場前就設好）不能被指定、不能被攻擊、不受全體／隨機效果與被動加成影響；以休眠上場不觸發「召喚」「打出手下後」「召喚手下後」（含爆炸符文）；送回手牌再打出時重新倒數；甦醒時補上被動加成（含相鄰），有衝刺的當回合照樣能攻擊手下（第 3b 階段 B2–B5；RosettaStone 原本只看卡片上的標記，休眠中照樣被指定、被打、吃加成、觸發秘密，再打出的不會甦醒，甦醒後一律不能攻擊）
   - `0034-riftcleaver-target-if-available.patch`：惡魔斬隙者（`ULD_165`）沒有手下可以摧毀時照樣能打出，戰吼不發動（第 3a 階段 B4；RosettaStone 原本必須有目標才能打出）
+  - `0038-kragwa-random-order.patch`：『巨蛙』奎格瓦放回手牌的法術順序隨機（第 3b 階段 D7，實測 R8；RosettaStone 原本照打出順序）
+  - `0039-casts-when-drawn-draw-trigger-order.patch`：抽到抽中時施放的牌時，補抽的那張先觸發「抽到牌」，再輪到抽中時施放的牌（第 3b 階段 D6，實測 R7：阿拉巴斯特先複製補抽的牌；RosettaStone 原本順序相反）
+  - `0040-eye-beam-outcast-cost-floor.patch`：魔眼光束流放時「設為 (1)」後再套其他減費、最低 0（第 3b 階段 A6；RosettaStone 原本被視界術減到 0 以下時反而變成 1）
+  - `0041-choice-defers-game-over.patch`：選擇畫面出現時，英雄死亡的勝負判定也等選完才做（第 3b 階段 C3b：死亡階段等選完才進行；RosettaStone 原本行動結束就判定）
+  - `0042-draw-keeps-stack.patch`：抽牌時觸發的效果不會把自己的牌留在堆疊上：對手有阿拉巴斯特時，視界術的減費只給抽到的那張（第 3b 階段 D 的複製規則、D4；RosettaStone 原本把 −3 給了阿拉巴斯特的複製品、抽到的那張沒減）
 
 ## 協定
 

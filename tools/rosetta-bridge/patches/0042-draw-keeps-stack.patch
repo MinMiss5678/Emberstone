@@ -1,0 +1,22 @@
+diff --git a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DrawTask.cpp b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DrawTask.cpp
+--- a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DrawTask.cpp
++++ b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/DrawTask.cpp
+@@ -19,6 +19,10 @@ TaskStatus DrawTask::Impl(Player* player)
+ {
+     std::vector<Playable*> cards;
+ 
++    // Triggers on the draw (e.g. Keymaster Alabaster copying the card) must
++    // not leave their cards on the stack
++    const auto stack = player->game->taskStack.playables;
++
+     for (int i = 0; i < m_amount; ++i)
+     {
+         if (Playable* card = Generic::Draw(player, nullptr))
+@@ -29,6 +33,7 @@ TaskStatus DrawTask::Impl(Player* player)
+ 
+     if (m_toStack)
+     {
++        player->game->taskStack.playables = stack;
+         for (auto& card : cards)
+         {
+             player->game->taskStack.playables.emplace_back(card);

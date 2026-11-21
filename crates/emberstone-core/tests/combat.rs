@@ -223,6 +223,32 @@ fn d9b_rush_minion_without_targets_stays_frozen() {
     assert!(!g.entity(e).frozen);
 }
 
+// case: 3b-B4b 剛上場的衝刺手下：上場後對手才出現手下，回合結束時還在 → 本回合結束就解凍（實測 R15）
+#[test]
+fn b4b_rush_frozen_enemy_appears_later_thaws() {
+    let mut g = start(&[], &[]);
+    let e = g.summon(0, "CS3_038", 0).expect("放不上戰場");
+    g.entity_mut(e).frozen = true;
+    g.summon(1, "CS2_182", 0).expect("放不上戰場");
+    end(&mut g);
+    assert!(!g.entity(e).frozen);
+}
+
+// case: 3b-B4b 上場時對手有手下，但回合結束時已經沒有 → 到下一個自己的回合結束才解凍（實測 R16）
+#[test]
+fn b4b_rush_frozen_enemy_gone_by_end_stays_frozen() {
+    let mut g = start(&[], &[]);
+    g.summon(1, "CS2_182", 0).expect("放不上戰場");
+    let e = g.summon(0, "CS3_038", 0).expect("放不上戰場");
+    g.entity_mut(e).frozen = true;
+    g.player_mut(1).board.clear();
+    end(&mut g);
+    assert!(g.entity(e).frozen);
+    end(&mut g);
+    end(&mut g);
+    assert!(!g.entity(e).frozen);
+}
+
 // D9a：英雄在自己回合被凍結、還沒攻擊（攻擊力 0）→ 本回合結束就解凍
 #[test]
 fn d9a_hero_frozen_on_own_turn_thaws_this_turn() {

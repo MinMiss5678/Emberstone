@@ -458,11 +458,14 @@ fn cmd_run(args: &[String]) -> Result<bool, String> {
         (Some("stage3a"), None) => {
             pool_file("stage3a_pool.txt")?.with_fill(pool_file("keyword_pool.txt")?)
         }
+        (Some("stage3b"), None) => {
+            pool_file("stage3b_pool.txt")?.with_fill(pool_file("keyword_pool.txt")?)
+        }
         (None, Some("A")) => Pool::new(&rows, Batch::A),
         (None, Some("B")) => Pool::new(&rows, Batch::B),
         (p, b) => {
             return Err(format!(
-                "要指定 --batch A|B 或 --pool keywords|stage2|stage3a 其中一個（收到 {p:?}、{b:?}）"
+                "要指定 --batch A|B 或 --pool keywords|stage2|stage3a|stage3b 其中一個（收到 {p:?}、{b:?}）"
             ));
         }
     };
@@ -542,6 +545,20 @@ fn play_emberstone(
             .map(|(id, rid)| (id.to_string(), rid.to_string()))
             .collect(),
     );
+    // 隨機產生的候選：卡池本身（不含補牌用的卡），兩個引擎順序相同（第 3 階段 Q2）
+    let random_pool: Vec<String> = pool.cards.iter().map(|c| c.id.to_string()).collect();
+    emberstone::set_random_pool(&random_pool);
+    let rosetta_pool: Vec<String> = random_pool
+        .iter()
+        .map(|id| {
+            to_rosetta
+                .get(id.as_str())
+                .map_or_else(|| id.clone(), |r| r.to_string())
+        })
+        .collect();
+    if let Err(e) = bridge.set_random_pool(&rosetta_pool) {
+        return Ok(Outcome::Error(format!("設定隨機候選失敗：{e:?}")));
+    }
     let plan = plan(pool, &to_rosetta, seed)?;
     let mut rec = match record(bridge, &plan, !powers)? {
         Ok(r) => r,

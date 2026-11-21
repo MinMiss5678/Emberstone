@@ -1,7 +1,7 @@
 diff --git a/Sources/Rosetta/PlayMode/CardSets/UldumCardsGen.cpp b/Sources/Rosetta/PlayMode/CardSets/UldumCardsGen.cpp
 --- a/Sources/Rosetta/PlayMode/CardSets/UldumCardsGen.cpp
 +++ b/Sources/Rosetta/PlayMode/CardSets/UldumCardsGen.cpp
-@@ -513,8 +513,9 @@ void UldumCardsGen::AddHunter(std::map<std::string, CardDef>& cards)
+@@ -513,12 +513,17 @@ void UldumCardsGen::AddHunter(std::map<std::string, CardDef>& cards)
      // - SECRET = 1
      // --------------------------------------------------------
      cardDef.ClearData();
@@ -10,5 +10,16 @@ diff --git a/Sources/Rosetta/PlayMode/CardSets/UldumCardsGen.cpp b/Sources/Roset
 -        std::make_shared<Trigger>(TriggerType::CAST_SPELL));
 +        std::make_shared<Trigger>(TriggerType::AFTER_CAST));
      cardDef.power.GetTrigger()->triggerSource = TriggerSource::ENEMY_SPELLS;
-     cardDef.power.GetTrigger()->conditions = SelfCondList{
-         std::make_shared<SelfCondition>(SelfCondition::IsFieldNotEmpty())
+-    cardDef.power.GetTrigger()->conditions = SelfCondList{
+-        std::make_shared<SelfCondition>(SelfCondition::IsFieldNotEmpty())
+-    };
++    // Dormant minions can't be destroyed: with only those it doesn't trigger
++    cardDef.power.GetTrigger()->conditions =
++        SelfCondList{ std::make_shared<SelfCondition>([](Playable* playable) {
++            return std::ranges::any_of(
++                playable->player->GetFieldZone()->GetMinions(),
++                [](const Minion* minion) { return !minion->IsUntouchable(); });
++        }) };
+     cardDef.power.GetTrigger()->tasks = ComplexTask::ActivateSecret(
+         TaskList{ std::make_shared<RandomTask>(EntityType::ENEMY_MINIONS, 1),
+                   std::make_shared<DestroyTask>(EntityType::STACK) });

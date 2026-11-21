@@ -1,7 +1,29 @@
 diff --git a/Sources/Rosetta/PlayMode/Games/Game.cpp b/Sources/Rosetta/PlayMode/Games/Game.cpp
 --- a/Sources/Rosetta/PlayMode/Games/Game.cpp
 +++ b/Sources/Rosetta/PlayMode/Games/Game.cpp
-@@ -544,8 +544,9 @@
+@@ -474,9 +474,20 @@ void Game::MainEnd()
+ 
+     if (!rushMinions.empty())
+     {
++        // A frozen Rush minion played this turn could only attack if the
++        // opponent has minions now (end of turn); otherwise it stays frozen
++        // until the end of its next turn, like any new minion.
++        const bool noTargets =
++            GetCurrentPlayer()->opponent->GetFieldZone()->IsEmpty();
+         for (auto& minion : rushMinions)
+         {
+-            entityList[minion]->SetGameTag(GameTag::ATTACKABLE_BY_RUSH, 0);
++            const auto playable = entityList[minion];
++            if (noTargets && playable->GetGameTag(GameTag::ATTACKABLE_BY_RUSH) &&
++                playable->GetGameTag(GameTag::FROZEN))
++            {
++                playable->SetExhausted(true);
++            }
++            playable->SetGameTag(GameTag::ATTACKABLE_BY_RUSH, 0);
+         }
+ 
+         rushMinions.clear();
+@@ -544,8 +555,9 @@ void Game::MainCleanUp()
      // Field
      for (const auto& minion : curPlayer->GetFieldZone()->GetMinions())
      {

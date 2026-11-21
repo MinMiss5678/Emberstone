@@ -12,6 +12,7 @@ on:
       - "data/keyword_pool.txt"
       - "data/stage2_pool.txt"
       - "data/stage3a_pool.txt"
+      - "data/stage3b_pool.txt"
       - ".github/workflows/difftest.yml"
       # difftest 組牌時查 emberstone-data 的卡片資料，並和 emberstone-core、emberstone-cards（卡片效果）比對；
       # 相依套件與工具鏈版本也會影響結果
@@ -158,3 +159,18 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           cat stage3a.txt
           if grep -q '：不一致' stage3a.txt; then exit 1; fi
+
+      - name: 第 3b 階段卡池差分（Emberstone 對 RosettaStone）
+        if: ${{ !cancelled() && steps.ready.outcome == 'success' }}
+        run: |
+          GAMES="${{ github.event.inputs.games || '100' }}"
+          cargo run --release -p emberstone-difftest --bin difftest -- \
+            run --engine emberstone --pool stage3b --powers --games "$GAMES" --seed "${{ github.run_number }}" > stage3b.txt || true
+          {
+            echo '## 差分測試（Emberstone，第 3b 階段卡池）'
+            echo '```'
+            grep -v '：一致$' stage3b.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat stage3b.txt
+          if grep -q '：不一致' stage3b.txt; then exit 1; fi

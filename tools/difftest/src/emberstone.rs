@@ -65,6 +65,18 @@ fn to_core_event(e: &RngEvent) -> core::RngEvent {
 /// RosettaStone 以原版卡號實作的卡：我們的卡號 → 原版卡的 dbfId（從牌庫發現時照它排序）。
 static ROSETTA_DBF: OnceLock<HashMap<&'static str, u32>> = OnceLock::new();
 
+/// 隨機產生（發現等）的候選卡（我們的卡號，依序）；和橋接程式的 random_pool 相同（第 3 階段 Q2）。
+static RANDOM_POOL: OnceLock<Vec<&'static str>> = OnceLock::new();
+
+/// 設定隨機產生的候選卡；整個程式只設定一次。
+pub fn set_random_pool(ids: &[String]) {
+    let _ = RANDOM_POOL.set(
+        ids.iter()
+            .filter_map(|id| Some(card_by_id(id)?.id))
+            .collect(),
+    );
+}
+
 /// 設定 RosettaStone 改用原版卡號的卡（我們的卡號 → 原版卡號）；整個程式只設定一次。
 pub fn set_rosetta_ids(renamed: &HashMap<String, String>) {
     let map = renamed
@@ -96,6 +108,7 @@ pub fn new_game(setup: &GameSetup) -> Result<Game, String> {
         rng,
         effects: Some(emberstone_cards::lookup),
         discover_order: Some(rosetta_dbf),
+        random_pool: RANDOM_POOL.get().map(Vec::as_slice),
     })
     .map_err(|e| format!("開局失敗：{e:?}"))
 }
@@ -194,6 +207,12 @@ fn player_state(g: &Game, p: usize) -> PlayerState {
     let board = me
         .board
         .iter()
+        // 已死亡、等死亡階段才移出戰場的手下不列（同 RosettaStone 的 FieldZone::GetAll；
+        // 只有發現的選擇畫面暫停出牌時看得到這種狀態）
+        .filter(|&&m| {
+            let e = g.entity(m);
+            e.health > 0 && !e.destroyed
+        })
         .map(|&m| {
             let e = g.entity(m);
             Minion {

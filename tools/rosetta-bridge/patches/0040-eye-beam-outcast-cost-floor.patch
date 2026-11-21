@@ -1,0 +1,26 @@
+diff --git a/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp b/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
+--- a/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
++++ b/Sources/Rosetta/PlayMode/CardSets/CoreCardsGen.cpp
+@@ -3287,7 +3287,8 @@ void CoreCardsGen::AddDemonHunter(std::map<std::string, CardDef>& cards)
+                 playable->GetZonePosition() ==
+                     playable->player->GetHandZone()->GetCount() - 1)
+             {
+-                return playable->GetGameTag(GameTag::COST) - 1;
++                // Costs (1), then other cost reductions apply (at least 0)
++                return std::max(playable->GetGameTag(GameTag::COST) - 1, 0);
+             }
+ 
+             return 0;
+diff --git a/Sources/Rosetta/PlayMode/CardSets/DemonHunterInitCardsGen.cpp b/Sources/Rosetta/PlayMode/CardSets/DemonHunterInitCardsGen.cpp
+--- a/Sources/Rosetta/PlayMode/CardSets/DemonHunterInitCardsGen.cpp
++++ b/Sources/Rosetta/PlayMode/CardSets/DemonHunterInitCardsGen.cpp
+@@ -353,7 +353,8 @@ void DemonHunterInitCardsGen::AddDemonHunter(
+                 playable->GetZonePosition() ==
+                     playable->player->GetHandZone()->GetCount() - 1)
+             {
+-                return playable->GetGameTag(GameTag::COST) - 1;
++                // Costs (1), then other cost reductions apply (at least 0)
++                return std::max(playable->GetGameTag(GameTag::COST) - 1, 0);
+             }
+ 
+             return 0;

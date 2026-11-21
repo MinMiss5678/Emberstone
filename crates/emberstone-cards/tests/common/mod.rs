@@ -50,6 +50,7 @@ pub fn config(
         rng: RngSource::Seed(1),
         effects: Some(emberstone_cards::lookup),
         discover_order: None,
+        random_pool: None,
     }
 }
 

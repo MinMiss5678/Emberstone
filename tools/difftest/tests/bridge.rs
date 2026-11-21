@@ -1334,7 +1334,85 @@ fn stage2_g2_example_pool() {
     assert!(out.contains("一致 3/3"), "{out}");
 }
 
-// 第 3a 階段 G1：第 3a 卡池加上英雄技能，Emberstone 和 RosettaStone 逐步一致
+// case: 3b-C1、3b-C2（橋接程式，patch）：發現的候選限定在指定清單中職業的法術；候選不到 3 張就照清單順序全部列出
+#[test]
+fn stage3b_c1_random_pool_override_on_bridge() {
+    let mut b = bridge();
+    let pool: Vec<String> = ["CORE_CS2_029", "CORE_CS2_072", "CS2_182", "CORE_CS2_023"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    b.set_random_pool(&pool).unwrap();
+    let setup = mage_vs(&["BAR_541"], "WARRIOR", &[]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 3);
+    play_id(
+        &mut b,
+        &s,
+        0,
+        "BAR_541",
+        None,
+        Some(Target::Hero { player: 2 }),
+    );
+    let choices = b
+        .options()
+        .unwrap()
+        .into_iter()
+        .filter(|a| matches!(a, Action::Choose { .. }))
+        .count();
+    assert_eq!(choices, 2);
+    let s = b.act(&Action::Choose { index: 1 }).unwrap();
+    assert_eq!(
+        s.players[0].hand.last().map(String::as_str),
+        Some("CORE_CS2_023")
+    );
+}
+
+// case: 3b-C3、3b-C3b（橋接程式，patch）：選擇畫面出現時先不進入死亡階段、不觸發對手「施放法術後」的秘密，選完才結算（實測 R5、R13）
+#[test]
+fn stage3b_c3b_discover_defers_rest_of_play_on_bridge() {
+    let mut b = bridge();
+    let pool: Vec<String> = ["CORE_CS2_029", "CORE_CS2_023"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    b.set_random_pool(&pool).unwrap();
+    let setup = mage_vs(&["CS2_182", "BAR_541"], "HUNTER", &["CS2_172", "ULD_152"]);
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 4);
+    let s = play_id(&mut b, &s, 1, "CS2_172", Some(0), None); // 對手的血沼迅猛龍 3/2
+    let s = end_until(&mut b, s, 6);
+    let s = play_id(&mut b, &s, 1, "ULD_152", None, None); // 踏板陷阱
+    let s = end_until(&mut b, s, 7);
+    let s = play_id(&mut b, &s, 0, "CS2_182", Some(0), None); // 冰風雪人
+    let s = end_until(&mut b, s, 9);
+    let s = play_id(&mut b, &s, 0, "BAR_541", None, Some(target_minion(2, 0)));
+    assert_eq!(s.players[1].secrets.len(), 1, "選牌前踏板陷阱還沒觸發");
+    assert_eq!(s.players[0].board.len(), 1);
+    let s = b.act(&Action::Choose { index: 0 }).unwrap();
+    assert!(s.players[1].board.is_empty());
+    assert!(s.players[1].secrets.is_empty());
+    assert!(s.players[0].board.is_empty(), "踏板陷阱摧毀冰風雪人");
+}
+
+// case: 3b-G1：第 3b 卡池加上英雄技能，Emberstone 和 RosettaStone 逐步一致
+#[test]
+fn stage3b_g1_pool() {
+    let out = run_difftest(&[
+        "run",
+        "--engine",
+        "emberstone",
+        "--pool",
+        "stage3b",
+        "--powers",
+        "--games",
+        "3",
+        "--seed",
+        "1",
+    ]);
+    assert!(out.contains("一致 3/3"), "{out}");
+}
+
 // 第 3a 階段 H1（橋接程式，patch）：鍊金師對調對手回合的焦油蠕行者，+2 再套用一次 → 7/3（實測 R7）
 #[test]
 fn stage3a_h1_alchemist_tar_creeper_on_bridge() {
@@ -1358,7 +1436,6 @@ fn stage3a_h1_alchemist_tar_creeper_on_bridge() {
     assert_eq!((c.attack, c.health), (7, 3));
 }
 
-// 第 3a 階段 G1：第 3a 卡池加上英雄技能，Emberstone 和 RosettaStone 逐步一致
 // 第 3a 階段 A1（橋接程式，patch）：平衡梟獸二選一的「造成 4 點傷害」是手下效果，不加法術傷害
 #[test]
 fn stage3a_a1_boomkin_damage_not_spell_on_bridge() {
@@ -1426,7 +1503,6 @@ fn stage3a_h1_silenced_water_elemental_does_not_freeze_on_bridge() {
     assert!(!y.frozen);
 }
 
-// 第 3a 階段 G1：第 3a 卡池加上英雄技能，Emberstone 和 RosettaStone 逐步一致
 // 第 3a 階段 D2（橋接程式，patch）：焦油蠕行者回到手牌再打出，攻擊力照常（自己回合 1、對手回合 3）
 #[test]
 fn stage3a_d2_tar_creeper_returned_to_hand_on_bridge() {
@@ -1526,7 +1602,6 @@ fn stage3a_d6_warmaul_freezing_trap_ends_duel_on_bridge() {
     assert_eq!(s.players[1].board[0].health, 5);
 }
 
-// 第 3a 階段 G1：第 3a 卡池加上英雄技能，Emberstone 和 RosettaStone 逐步一致
 /// 打出手牌中的 id（手下放在 pos，指定 target）。
 fn play_id(
     b: &mut Bridge,
@@ -1682,7 +1757,6 @@ fn stage3a_d2_tar_creeper_silenced_on_opponent_turn_on_bridge() {
     assert_eq!(s.players[0].board[0].attack, 1);
 }
 
-// 第 3a 階段 G1：第 3a 卡池加上英雄技能，Emberstone 和 RosettaStone 逐步一致
 // 第 3a 階段 B5（橋接程式，patch）：霧帆掠劫者沒有武器時打出不用選目標，有武器時才要選
 #[test]
 fn stage3a_b5_fogsail_target_needs_weapon_on_bridge() {
@@ -1799,6 +1873,38 @@ fn stage3a_h8_rush_minion_frozen_on_bridge() {
     let s = end_until(&mut b, s, 9);
     let s = play_id(&mut b, &s, 0, "CS3_038", Some(0), None);
     let s = play_id(&mut b, &s, 0, "CS2_031", None, Some(target_minion(1, 0)));
+    assert!(s.players[0].board[0].frozen);
+    let s = b.act(&Action::End).unwrap();
+    assert!(!s.players[0].board[0].frozen);
+}
+
+// case: 3b-B4b（橋接程式，patch）：上場時對手有手下，但回合結束前被打死 → 到下一個自己的回合結束才解凍（實測 R16）
+#[test]
+fn stage3b_b4b_rush_frozen_enemy_gone_by_end_on_bridge() {
+    let mut b = bridge();
+    let setup = mage_vs(
+        &["CS3_038", "CS2_031", "CORE_CS2_029"],
+        "WARRIOR",
+        &["CS2_120"],
+    );
+    let s = b.new_game(&setup).unwrap();
+    let s = end_until(&mut b, s, 4);
+    let s = play_id(&mut b, &s, 1, "CS2_120", Some(0), None); // 對手的淡水鱷 2/3
+    let s = end_until(&mut b, s, 13);
+    let s = play_id(&mut b, &s, 0, "CS3_038", Some(0), None); // 紅鰓刃顎魚人 3/1 衝刺
+    let s = play_id(&mut b, &s, 0, "CS2_031", None, Some(target_minion(1, 0))); // 冰槍術凍結它
+    let s = play_id(
+        &mut b,
+        &s,
+        0,
+        "CORE_CS2_029",
+        None,
+        Some(target_minion(2, 0)),
+    ); // 火球術打死淡水鱷
+    assert!(s.players[1].board.is_empty());
+    let s = b.act(&Action::End).unwrap();
+    assert!(s.players[0].board[0].frozen);
+    let s = end_until(&mut b, s, 15);
     assert!(s.players[0].board[0].frozen);
     let s = b.act(&Action::End).unwrap();
     assert!(!s.players[0].board[0].frozen);
