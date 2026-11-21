@@ -2,6 +2,7 @@
 // 協定：stdin 每行一個 JSON 請求，stdout 每行一個 JSON 回應。
 //   {"cmd":"version"} | {"cmd":"new",...} | {"cmd":"options"} | {"cmd":"act","action":{...}}
 //   {"cmd":"snapshot"} | {"cmd":"events"} | {"cmd":"quit"}
+//   {"cmd":"random_pool","cards":[...]}：隨機產生（發現等）的候選卡，之後的對局都用（空陣列＝不限定）
 // 成功：{"ok":true,...}；失敗：{"ok":false,"error":{"kind":...,"message":...}}
 
 #include <Rosetta/PlayMode/Cards/Cards.hpp>
@@ -588,6 +589,21 @@ json Handle(const json& req)
     if (cmd == "events")
     {
         return { { "ok", true }, { "events", EventsJson() } };
+    }
+    if (cmd == "random_pool")
+    {
+        std::vector<Card*> cards;
+        for (const std::string id : req.at("cards"))
+        {
+            Card* card = Cards::FindCardByID(id);
+            if (card == nullptr || card->id.empty())
+            {
+                throw BridgeError{ "bad_request", "RosettaStone 沒有這張卡：" + id };
+            }
+            cards.push_back(card);
+        }
+        Cards::SetDiscoverOverride(std::move(cards));
+        return { { "ok", true } };
     }
     throw BridgeError{ "bad_request", "不明的指令 " + cmd };
 }

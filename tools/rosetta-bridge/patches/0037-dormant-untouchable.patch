@@ -1,0 +1,226 @@
+diff --git a/Sources/Rosetta/PlayMode/Cards/Card.cpp b/Sources/Rosetta/PlayMode/Cards/Card.cpp
+--- a/Sources/Rosetta/PlayMode/Cards/Card.cpp
++++ b/Sources/Rosetta/PlayMode/Cards/Card.cpp
+@@ -622,7 +622,9 @@ bool Card::TargetingRequirements(Player* player, Character* target)
+         return false;
+     }
+ 
+-    if (!targetsLocation && target->card->IsUntouchable())
++    // Dormant minions are untouchable on the entity (not the card)
++    if (!targetsLocation && (target->card->IsUntouchable() ||
++                             target->GetGameTag(GameTag::UNTOUCHABLE)))
+     {
+         return false;
+     }
+diff --git a/Sources/Rosetta/PlayMode/Models/Character.cpp b/Sources/Rosetta/PlayMode/Models/Character.cpp
+--- a/Sources/Rosetta/PlayMode/Models/Character.cpp
++++ b/Sources/Rosetta/PlayMode/Models/Character.cpp
+@@ -220,7 +220,8 @@ std::vector<Character*> Character::GetValidAttackTargets(
+ 
+     for (auto& minion : opponent->GetFieldZone()->GetMinions())
+     {
+-        if (!minion->HasStealth())
++        // Dormant minions cannot be attacked
++        if (!minion->HasStealth() && !minion->IsUntouchable())
+         {
+             if (minion->HasTaunt())
+             {
+diff --git a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/IncludeTask.cpp b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/IncludeTask.cpp
+--- a/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/IncludeTask.cpp
++++ b/Sources/Rosetta/PlayMode/Tasks/SimpleTasks/IncludeTask.cpp
+@@ -392,6 +392,18 @@ std::vector<Playable*> IncludeTask::GetEntities(EntityType entityType,
+                 "IncludeTask::GetEntities() - Invalid entity type");
+     }
+ 
++    // Dormant minions are not affected by group or random effects
++    using enum EntityType;
++    if (entityType != SOURCE && entityType != TARGET && entityType != STACK &&
++        entityType != STACK_NUM0 && entityType != EVENT_SOURCE &&
++        entityType != EVENT_TARGET)
++    {
++        std::erase_if(entities, [](Playable* playable) {
++            const auto minion = dynamic_cast<Minion*>(playable);
++            return minion && minion->IsUntouchable();
++        });
++    }
++
+     return entities;
+ }
+ 
+diff --git a/Sources/Rosetta/PlayMode/Auras/Aura.cpp b/Sources/Rosetta/PlayMode/Auras/Aura.cpp
+--- a/Sources/Rosetta/PlayMode/Auras/Aura.cpp
++++ b/Sources/Rosetta/PlayMode/Auras/Aura.cpp
+@@ -211,6 +211,13 @@ void Aura::Clone(Playable* clone)
+ 
+ void Aura::Apply(Playable* entity)
+ {
++    // Dormant minions get no aura (applied when they awaken)
++    if (const auto minion = dynamic_cast<Minion*>(entity);
++        minion && minion->IsUntouchable())
++    {
++        return;
++    }
++
+     if (condition)
+     {
+         if (!condition->Evaluate(entity))
+diff --git a/Includes/Rosetta/PlayMode/Tasks/ComplexTask.hpp b/Includes/Rosetta/PlayMode/Tasks/ComplexTask.hpp
+--- a/Includes/Rosetta/PlayMode/Tasks/ComplexTask.hpp
++++ b/Includes/Rosetta/PlayMode/Tasks/ComplexTask.hpp
+@@ -335,7 +335,32 @@ class ComplexTask
+                     source->GetGameTag(GameTag::TAG_SCRIPT_DATA_NUM_1))
+                 {
+                     source->SetGameTag(GameTag::UNTOUCHABLE, 0);
+-                    source->SetGameTag(GameTag::EXHAUSTED, 1);
++
++                    // Like a newly played minion: Rush can still attack
++                    // minions this turn
++                    const auto minion = dynamic_cast<Minion*>(source);
++                    if (minion && minion->HasRush())
++                    {
++                        minion->SetAttackableByRush(true);
++                        minion->game->rushMinions.emplace_back(
++                            minion->GetGameTag(GameTag::ENTITY_ID));
++                    }
++                    else
++                    {
++                        source->SetGameTag(GameTag::EXHAUSTED, 1);
++                    }
++
++                    // Auras skipped it while dormant
++                    if (minion)
++                    {
++                        for (const auto& aura :
++                             minion->player->GetFieldZone()->auras)
++                        {
++                            aura->NotifyEntityAdded(minion);
++                        }
++                        minion->player->GetFieldZone()
++                            ->MarkAdjacentAurasDirty();
++                    }
+                 }
+             }));
+         ret.emplace_back(std::make_shared<SimpleTasks::ConditionTask>(
+diff --git a/Sources/Rosetta/PlayMode/Actions/PlayCard.cpp b/Sources/Rosetta/PlayMode/Actions/PlayCard.cpp
+--- a/Sources/Rosetta/PlayMode/Actions/PlayCard.cpp
++++ b/Sources/Rosetta/PlayMode/Actions/PlayCard.cpp
+@@ -359,6 +359,14 @@ void PlayMinion(Player* player, Minion* minion, Character* target, int fieldPos,
+     // to check the condition of outcast task
+     const int handPos = minion->GetZonePosition();
+ 
++    // Dormant before entering the field, so auras skip it; the countdown
++    // starts over (also when it was returned to hand and played again)
++    if (minion->HasDormant())
++    {
++        minion->SetGameTag(GameTag::UNTOUCHABLE, 1);
++        minion->SetGameTag(GameTag::TAG_SCRIPT_DATA_NUM_2, 0);
++    }
++
+     // Add minion to field zone
+     player->GetFieldZone()->Add(minion, fieldPos);
+ 
+@@ -382,11 +390,18 @@ void PlayMinion(Player* player, Minion* minion, Character* target, int fieldPos,
+     player->game->taskQueue.EndEvent();
+     player->game->ProcessDestroyAndUpdateAura();
+ 
++    // A minion played Dormant triggers no summon, after play or after
++    // summon effects (including Secrets)
++    const bool dormant = minion->IsUntouchable();
++
+     // Process summon trigger
+-    player->game->taskQueue.StartEvent();
+-    player->game->triggerManager.OnSummonTrigger(minion);
+-    player->game->ProcessTasks();
+-    player->game->taskQueue.EndEvent();
++    if (!dormant)
++    {
++        player->game->taskQueue.StartEvent();
++        player->game->triggerManager.OnSummonTrigger(minion);
++        player->game->ProcessTasks();
++        player->game->taskQueue.EndEvent();
++    }
+ 
+     // Process target trigger
+     if (target)
+@@ -428,12 +443,6 @@ void PlayMinion(Player* player, Minion* minion, Character* target, int fieldPos,
+         minion->ActivateTask(PowerType::POWER, target, chooseOne);
+     }
+ 
+-    // Check card has dormant
+-    if (minion->HasDormant())
+-    {
+-        minion->SetGameTag(GameTag::UNTOUCHABLE, 1);
+-    }
+-
+     // Check card has overload
+     if (minion->HasOverload())
+     {
+@@ -446,21 +455,24 @@ void PlayMinion(Player* player, Minion* minion, Character* target, int fieldPos,
+ 
+     player->game->ProcessDestroyAndUpdateAura();
+ 
+-    // Validate after play minion trigger
+-    Trigger::ValidateTriggers(player->game, minion,
+-                              SequenceType::AFTER_PLAY_MINION);
++    if (!dormant)
++    {
++        // Validate after play minion trigger
++        Trigger::ValidateTriggers(player->game, minion,
++                                  SequenceType::AFTER_PLAY_MINION);
+ 
+-    // Process after play minion trigger
+-    player->game->taskQueue.StartEvent();
+-    player->game->triggerManager.OnAfterPlayMinionTrigger(minion);
+-    player->game->ProcessTasks();
+-    player->game->taskQueue.EndEvent();
++        // Process after play minion trigger
++        player->game->taskQueue.StartEvent();
++        player->game->triggerManager.OnAfterPlayMinionTrigger(minion);
++        player->game->ProcessTasks();
++        player->game->taskQueue.EndEvent();
+ 
+-    // Process after summon trigger
+-    player->game->taskQueue.StartEvent();
+-    player->game->triggerManager.OnAfterSummonTrigger(minion);
+-    player->game->ProcessTasks();
+-    player->game->taskQueue.EndEvent();
++        // Process after summon trigger
++        player->game->taskQueue.StartEvent();
++        player->game->triggerManager.OnAfterSummonTrigger(minion);
++        player->game->ProcessTasks();
++        player->game->taskQueue.EndEvent();
++    }
+ 
+     player->game->ProcessDestroyAndUpdateAura();
+ }
+diff --git a/Sources/Rosetta/PlayMode/Actions/Summon.cpp b/Sources/Rosetta/PlayMode/Actions/Summon.cpp
+--- a/Sources/Rosetta/PlayMode/Actions/Summon.cpp
++++ b/Sources/Rosetta/PlayMode/Actions/Summon.cpp
+@@ -17,6 +17,14 @@ void Summon(Minion* minion, int fieldPos, Entity* summoner)
+ {
+     Game* game = minion->game;
+ 
++    // Dormant before entering the field, so auras skip it; the countdown
++    // starts over (also when it was returned to hand and played again)
++    if (minion->HasDormant())
++    {
++        minion->SetGameTag(GameTag::UNTOUCHABLE, 1);
++        minion->SetGameTag(GameTag::TAG_SCRIPT_DATA_NUM_2, 0);
++    }
++
+     // Add summoned minion to field zone
+     minion->player->GetFieldZone()->Add(minion, fieldPos);
+ 
+@@ -27,12 +35,6 @@ void Summon(Minion* minion, int fieldPos, Entity* summoner)
+         minion->player->SetNumWatchPostSummonedThisGame(val + 1);
+     }
+ 
+-    // Check card has dormant
+-    if (minion->HasDormant())
+-    {
+-        minion->SetGameTag(GameTag::UNTOUCHABLE, 1);
+-    }
+-
+     // Set it is summoned minion
+     minion->SetSummoned(true);
+ 

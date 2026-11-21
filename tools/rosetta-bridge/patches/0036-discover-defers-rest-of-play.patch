@@ -1,0 +1,140 @@
+diff --git a/Includes/Rosetta/PlayMode/Actions/PlayCard.hpp b/Includes/Rosetta/PlayMode/Actions/PlayCard.hpp
+--- a/Includes/Rosetta/PlayMode/Actions/PlayCard.hpp
++++ b/Includes/Rosetta/PlayMode/Actions/PlayCard.hpp
+@@ -64,6 +64,11 @@ void PlayLocation(Player* player, Location* location, int fieldPos = -1);
+ //! \param player The player to replay the card.
+ //! \param card The card to replay.
+ void ReplayCard(Player* player, Card* card);
++
++//! Resumes a spell play paused by a Discover choice of \p player: deaths,
++//! after-cast and after-play triggers run only after the pick.
++//! \return true if a paused play was resumed.
++bool ResumePendingPlay(Player* player);
+ }  // namespace RosettaStone::PlayMode::Generic
+ 
+ #endif  // ROSETTASTONE_PLAYMODE_PLAY_CARD_HPP
+diff --git a/Sources/Rosetta/PlayMode/Actions/PlayCard.cpp b/Sources/Rosetta/PlayMode/Actions/PlayCard.cpp
+--- a/Sources/Rosetta/PlayMode/Actions/PlayCard.cpp
++++ b/Sources/Rosetta/PlayMode/Actions/PlayCard.cpp
+@@ -24,6 +24,21 @@ namespace RosettaStone::PlayMode::Generic
+ {
+ namespace
+ {
++//! A spell play paused by a Discover choice (resumed by ResumePendingPlay).
++struct PendingPlay
++{
++    Game* game = nullptr;
++    Player* player = nullptr;
++    Spell* spell = nullptr;
++    std::vector<Minion*> minions;
++};
++
++PendingPlay g_pendingPlay;
++
++void AfterCastSpell(Player* player, Spell* spell,
++                    const std::vector<Minion*>& minions);
++void AfterPlayCard(Player* player, Playable* source);
++
+ bool CanPlayCard(Playable* source, Character* target, int chooseOne)
+ {
+     if (!source->IsPlayableByPlayer())
+@@ -180,6 +195,34 @@ void PlayCard(Player* player, Playable* source, Character* target, int fieldPos,
+                 "Generic::PlayCard() - Invalid card type!");
+     }
+ 
++    // Paused by a Discover choice: the rest runs after the pick
++    if (g_pendingPlay.spell == source)
++    {
++        return;
++    }
++
++    AfterPlayCard(player, source);
++}
++
++bool ResumePendingPlay(Player* player)
++{
++    if (!g_pendingPlay.spell || g_pendingPlay.game != player->game ||
++        player->choice)
++    {
++        return false;
++    }
++
++    const auto pending = std::exchange(g_pendingPlay, PendingPlay{});
++    pending.player->game->ProcessDestroyAndUpdateAura();
++    AfterCastSpell(pending.player, pending.spell, pending.minions);
++    AfterPlayCard(pending.player, pending.spell);
++    return true;
++}
++
++namespace
++{
++void AfterPlayCard(Player* player, Playable* source)
++{
+     // Process after play card trigger
+     player->game->taskQueue.StartEvent();
+     player->game->triggerManager.OnAfterPlayCardTrigger(source);
+@@ -224,6 +267,7 @@ void PlayCard(Player* player, Playable* source, Character* target, int fieldPos,
+         player->SetComboActive(true);
+     }
+ }
++}  // namespace
+ 
+ void PlayHero(Player* player, Hero* hero, Character* target, int chooseOne)
+ {
+@@ -470,9 +514,29 @@ void PlaySpell(Player* player, Spell* spell, Character* target, int chooseOne)
+         }
+ 
+         CastSpell(player, spell, target, chooseOne);
++
++        // A Discover choice pauses the rest (deaths, after-cast and
++        // after-play triggers) until it is picked; effects already
++        // triggered (e.g. Frothing Berserker) show before the pick
++        if (player->choice &&
++            player->choice->choiceType == ChoiceType::GENERAL)
++        {
++            player->game->UpdateAura();
++            g_pendingPlay = { player->game, player, spell, minions };
++            return;
++        }
++
+         player->game->ProcessDestroyAndUpdateAura();
+     }
+ 
++    AfterCastSpell(player, spell, minions);
++}
++
++namespace
++{
++void AfterCastSpell(Player* player, Spell* spell,
++                    const std::vector<Minion*>& minions)
++{
+     // Validate after play spell trigger
+     Trigger::ValidateTriggers(player->game, spell,
+                               SequenceType::AFTER_PLAY_SPELL);
+@@ -500,6 +564,7 @@ void PlaySpell(Player* player, Spell* spell, Character* target, int chooseOne)
+ 
+     player->game->ProcessDestroyAndUpdateAura();
+ }
++}  // namespace
+ 
+ void PlayWeapon(Player* player, Weapon* weapon, Character* target)
+ {
+diff --git a/Sources/Rosetta/PlayMode/Tasks/PlayerTasks/ChooseTask.cpp b/Sources/Rosetta/PlayMode/Tasks/PlayerTasks/ChooseTask.cpp
+--- a/Sources/Rosetta/PlayMode/Tasks/PlayerTasks/ChooseTask.cpp
++++ b/Sources/Rosetta/PlayMode/Tasks/PlayerTasks/ChooseTask.cpp
+@@ -4,6 +4,7 @@
+ // Copyright (c) 2017-2024 Chris Ohk
+ 
+ #include <Rosetta/PlayMode/Actions/Choose.hpp>
++#include <Rosetta/PlayMode/Actions/PlayCard.hpp>
+ #include <Rosetta/PlayMode/Games/Game.hpp>
+ #include <Rosetta/PlayMode/Tasks/PlayerTasks/ChooseTask.hpp>
+ 
+@@ -49,6 +50,7 @@ TaskStatus ChooseTask::Impl(Player* player)
+                 return TaskStatus::STOP;
+             }
+             player->game->ProcessTasks();
++            Generic::ResumePendingPlay(player);
+             player->game->ProcessDestroyAndUpdateAura();
+             break;
+         }

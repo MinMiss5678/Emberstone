@@ -1,0 +1,46 @@
+diff --git a/Sources/Rosetta/PlayMode/Actions/Draw.cpp b/Sources/Rosetta/PlayMode/Actions/Draw.cpp
+--- a/Sources/Rosetta/PlayMode/Actions/Draw.cpp
++++ b/Sources/Rosetta/PlayMode/Actions/Draw.cpp
+@@ -40,7 +40,17 @@ Playable* Draw(Player* player, Playable* cardToDraw)
+     // Add card to hand
+     if (AddCardToHand(player, playable))
+     {
+-        if (!cardToDraw)
++        const auto tasks = playable->card->power.GetTopdeckTask();
++
++        // A card that Casts When Drawn triggers "draws a card" after the
++        // replacement card does
++        const bool castsWhenDrawn =
++            !tasks.empty() &&
++            playable->card->text.find("<b>Casts When Drawn</b>") !=
++                std::string::npos;
++        const bool fromTop = !cardToDraw;
++
++        if (fromTop && !castsWhenDrawn)
+         {
+             player->game->taskQueue.StartEvent();
+             player->game->triggerManager.OnDrawCardTrigger(playable);
+@@ -48,8 +58,6 @@ Playable* Draw(Player* player, Playable* cardToDraw)
+             player->game->taskQueue.EndEvent();
+         }
+ 
+-        const auto tasks = playable->card->power.GetTopdeckTask();
+-
+         // Process topdeck tasks
+         if (!tasks.empty())
+         {
+@@ -83,6 +91,14 @@ Playable* Draw(Player* player, Playable* cardToDraw)
+             }
+         }
+ 
++        if (fromTop && castsWhenDrawn)
++        {
++            player->game->taskQueue.StartEvent();
++            player->game->triggerManager.OnDrawCardTrigger(playable);
++            player->game->ProcessTasks();
++            player->game->taskQueue.EndEvent();
++        }
++
+         if (!cardToDraw)
+         {
+             player->game->taskQueue.StartEvent();

@@ -176,3 +176,38 @@ fn stage3a_g1_committed_pool() {
         }
     }
 }
+
+/// 第 3b 階段新增的 13 張卡（docs/第3b階段-case表.md「範圍與做法」）。
+const STAGE3B: [&str; 13] = [
+    "CORE_BAR_541",
+    "CORE_BT_491",
+    "CORE_BT_801",
+    "CORE_EX1_145",
+    "CORE_BT_156",
+    "CORE_DAL_575",
+    "CORE_EX1_100",
+    "CORE_SCH_717",
+    "CORE_SW_439",
+    "CORE_TRL_345",
+    "CORE_CS2_004",
+    "CORE_EX1_058",
+    "CORE_SW_068",
+];
+
+// case: 3b-G1 卡池 = 第 3a 卡池 + 第 3b 的 13 張，都是可收藏、有實作效果的卡
+#[test]
+fn stage3b_g1_committed_pool() {
+    let read = |name: &str| {
+        let path = format!("{}/../../data/{name}", env!("CARGO_MANIFEST_DIR"));
+        parse_pool(&std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("讀不到 {path}")))
+    };
+    let ids: BTreeSet<String> = read("stage3b_pool.txt").into_iter().collect();
+    let mut expected: BTreeSet<String> = read("stage3a_pool.txt").into_iter().collect();
+    expected.extend(STAGE3B.iter().map(|s| s.to_string()));
+    assert_eq!(ids, expected);
+    for id in STAGE3B {
+        let c = card_by_id(id).unwrap_or_else(|| panic!("卡表沒有 {id}"));
+        assert!(c.collectible, "{id} 不是可收藏的卡");
+        assert!(emberstone_cards::lookup(id).is_some(), "{id} 沒有實作效果");
+    }
+}

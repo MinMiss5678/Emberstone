@@ -46,9 +46,82 @@ pub(crate) fn lookup(id: &str) -> Option<&'static CardDef> {
         "CS3_020" => &ILLIDARI_INQUISITOR,
         "CS3_022" => &FOGSAIL_FREEBOOTER,
         "NEW1_033" => &LEOKK,
+        "CORE_BT_156" => &IMPRISONED_FELHOUND,
+        "CORE_DAL_575" => &KHADGAR,
+        "CORE_EX1_100" => &LOREWALKER_CHO,
+        "CORE_SCH_717" => &KEYMASTER_ALABASTER,
+        "CORE_SW_439" => &VIBRANT_SQUIRREL,
+        "CORE_TRL_345" => &KRAGWA,
         _ => return None,
     })
 }
+
+/// 被囚禁的邪惡犬魔：休眠 2 回合；衝刺（卡片關鍵字）。
+static IMPRISONED_FELHOUND: CardDef = CardDef {
+    dormant: 2,
+    ..CardDef::EMPTY
+};
+
+/// 卡德加：你召喚手下的卡牌會召喚兩次（效果召喚的手下多一隻，放在右邊）。
+static KHADGAR: CardDef = CardDef {
+    triggers: &[Trigger {
+        when: When::FriendlySummonByEffect,
+        effect: Effect::SummonCopy,
+    }],
+    ..CardDef::EMPTY
+};
+
+/// 博學行者阿洲：每當有玩家施放法術，對手便獲得一張相同的法術。
+static LOREWALKER_CHO: CardDef = CardDef {
+    triggers: &[Trigger {
+        when: When::AnySpellPlayed,
+        effect: Effect::Custom(lorewalker_cho),
+    }],
+    ..CardDef::EMPTY
+};
+
+/// 法術的複製（原始費用的新牌）給施放者的對手；手牌滿了就沒有。
+fn lorewalker_cho(g: &mut Game, ctx: &Ctx) {
+    let Some(spell) = ctx.target else {
+        return;
+    };
+    let (caster, id) = (g.entity(spell).owner, g.entity(spell).card.id);
+    g.add_to_hand(1 - caster, id);
+}
+
+/// 大鑰師阿拉巴斯特：每當對手抽牌，放一張相同的牌到你的手中，且消耗為 (1)。
+static KEYMASTER_ALABASTER: CardDef = CardDef {
+    triggers: &[Trigger {
+        when: When::OpponentDraws,
+        effect: Effect::Custom(keymaster_alabaster),
+    }],
+    ..CardDef::EMPTY
+};
+
+fn keymaster_alabaster(g: &mut Game, ctx: &Ctx) {
+    let Some(card) = ctx.target else {
+        return;
+    };
+    let id = g.entity(card).card.id;
+    if let Some(copy) = g.add_to_hand(ctx.owner, id) {
+        g.entity_mut(copy).cost_set = Some(1);
+    }
+}
+
+/// 活潑的松鼠：死亡之聲，將 4 個橡實洗入你的牌堆。
+static VIBRANT_SQUIRREL: CardDef = CardDef {
+    deathrattle: Some(Effect::ShuffleIntoDeck {
+        card: "SW_439t",
+        count: 4,
+    }),
+    ..CardDef::EMPTY
+};
+
+/// 『巨蛙』奎格瓦：戰吼，使你上回合打出的所有法術返回你的手中。
+static KRAGWA: CardDef = CardDef {
+    play: Some(Effect::ReturnLastTurnSpells),
+    ..CardDef::EMPTY
+};
 
 const fn deathrattle_summon(card: &'static str, count: i32) -> CardDef {
     CardDef {

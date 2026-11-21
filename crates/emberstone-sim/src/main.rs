@@ -92,6 +92,7 @@ fn cmd_bench(args: &[String]) -> Result<(), String> {
             rng: RngSource::Seed(rng.next_u64()),
             effects: Some(emberstone_cards::lookup),
             discover_order: None,
+            random_pool: None,
         };
         let start = Instant::now();
         let mut game = Game::new(config).map_err(|e| format!("開局失敗：{e:?}"))?;

@@ -52,8 +52,12 @@ fn totemic_call(g: &mut Game, ctx: &Ctx) {
         candidates = BASIC_TOTEMS.to_vec();
     }
     let i = g.random_int(0, candidates.len() as i64 - 1) as usize;
-    let pos = g.player(ctx.owner).board.len();
-    g.summon(ctx.owner, candidates[i], pos);
+    // 照一般召喚放最右邊（卡德加也會加倍）
+    let summon = Effect::Summon {
+        card: candidates[i],
+        count: 1,
+    };
+    g.run(&summon, ctx);
 }
 
 /// 匕首專精：裝備 1/2 匕首。

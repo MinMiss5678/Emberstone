@@ -1,4 +1,4 @@
-//! 第 3a 階段的法術（批次 A 中沿用既有機制的卡）。
+//! 第 3a、3b 階段的法術（批次 A）。
 
 use emberstone_core::{CardDef, Choice, Effect, Sel, TargetReq, Usable};
 
@@ -32,6 +32,11 @@ pub(crate) fn lookup(id: &str) -> Option<&'static CardDef> {
         "SW_108t" => &SECOND_FLAME,
         "CORE_TRL_307" => &FLASH_OF_LIGHT,
         "CORE_TSC_650" => &FLIPPER_FRIENDS,
+        "CORE_BAR_541" => &RUNE_ORB,
+        "CORE_BT_491" => &SPECTRAL_SIGHT,
+        "CORE_BT_801" => &EYE_BEAM,
+        "CORE_EX1_145" => &PREPARATION,
+        "SW_439t" => &ACORN,
         _ => return None,
     })
 }
@@ -57,6 +62,42 @@ const fn damage(amount: i32) -> Effect {
         amount,
     }
 }
+
+/// 符文寶珠：造成 2 點傷害，發現一個法術。
+static RUNE_ORB: CardDef = targeted(
+    TargetReq::Character,
+    Effect::Seq(&[damage(2), Effect::DiscoverSpell]),
+);
+
+/// 靈視：抽一張牌；流放：再抽一張牌。
+static SPECTRAL_SIGHT: CardDef = CardDef {
+    play: Some(Effect::Draw(1)),
+    outcast: Some(Effect::Draw(1)),
+    ..CardDef::EMPTY
+};
+
+/// 魔眼光束：生命竊取（卡片關鍵字），對一個手下造成 3 點傷害；流放：費用改為 (1)。
+static EYE_BEAM: CardDef = CardDef {
+    target: TargetReq::Minion,
+    play: Some(damage(3)),
+    outcast_cost: Some(1),
+    ..CardDef::EMPTY
+};
+
+/// 準備：本回合你的下一個法術費用減少 (2)。
+static PREPARATION: CardDef = untargeted(Effect::SpellDiscount(2));
+
+/// 橡實（活潑的松鼠洗入牌庫）：抽中時施放；召喚一隻 2/1 滿足的松鼠。
+static ACORN: CardDef = CardDef {
+    play: Some(SUMMON_SQUIRREL),
+    when_drawn: Some(SUMMON_SQUIRREL),
+    ..CardDef::EMPTY
+};
+
+const SUMMON_SQUIRREL: Effect = Effect::Summon {
+    card: "SW_439t2",
+    count: 1,
+};
 
 /// 糾纏之根：二選一（同 RosettaStone 的順序）：1 造成 2 點傷害；2 召喚兩個 1/1 樹苗。
 static LIVING_ROOTS: CardDef = CardDef {
